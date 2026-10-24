@@ -1,0 +1,117 @@
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Instructure//Canvas//EN
+X-WR-CALNAME:Riley Student Calendar (Canvas)
+BEGIN:VEVENT
+UID:assignment-1101@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261019T035900Z
+DTEND:20261019T035900Z
+SUMMARY:Dosage Calculation Practice Set [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1101
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-1102@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261023T035900Z
+DTEND:20261023T035900Z
+SUMMARY:Quiz 3: Autonomic Drugs [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1102
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-1103@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261027T035900Z
+DTEND:20261027T035900Z
+SUMMARY:Drug Card Set 4 (Cardiac) [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1103
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-1104@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261029T140000Z
+DTEND:20261029T140000Z
+SUMMARY:Exam 2: Cardiovascular Drugs [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1104
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-1105@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261106T045900Z
+DTEND:20261106T045900Z
+SUMMARY:Quiz 4: Anticoagulants [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1105
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-1106@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261113T045900Z
+DTEND:20261113T045900Z
+SUMMARY:Medication Safety Case Study [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1106
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-1107@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261119T150000Z
+DTEND:20261119T150000Z
+SUMMARY:Exam 3: Respiratory and GI Drugs [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1107
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-1108@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261210T150000Z
+DTEND:20261210T150000Z
+SUMMARY:Final Exam [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-1108
+END:VEVENT
+BEGIN:VEVENT
+UID:event-2001@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261027T140000Z
+DTEND:20261027T140000Z
+SUMMARY:PHARM 201 Lecture [PHARM 201 - Pharmacology]
+URL:https://canvas.demo-university.edu/calendar?event=event-2001
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-2101@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261030T035900Z
+DTEND:20261030T035900Z
+SUMMARY:Head-to-Toe Assessment Video [NURS 210 - Health Assessment]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-2101
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-2102@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261103T045900Z
+DTEND:20261103T045900Z
+SUMMARY:Quiz: Cardiac and Peripheral Vascular [NURS 210 - Health Assessment]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-2102
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-2103@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261110T045900Z
+DTEND:20261110T045900Z
+SUMMARY:Care Plan 2 [NURS 210 - Health Assessment]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-2103
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-2104@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART;VALUE=DATE:20261117
+DTEND;VALUE=DATE:20261117
+SUMMARY:Midterm Skills Check-off [NURS 210 - Health Assessment]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-2104
+END:VEVENT
+BEGIN:VEVENT
+UID:assignment-3101@canvas.demo-university.edu
+DTSTAMP:20261001T120000Z
+DTSTART:20261102T045900Z
+DTEND:20261102T045900Z
+SUMMARY:Reflection Paper [PSYC 220 - Lifespan Development]
+URL:https://canvas.demo-university.edu/calendar?event=assignment-3101
+END:VEVENT
+END:VCALENDAR
