@@ -132,12 +132,19 @@ export async function startLesson(student: Who, topicId: string, opts: { withRol
   const kind = opts.kind ?? "teach";
   // Prerequisites first (deepest foundation first), then the topic itself.
   // Practice always probes. A skipped check goes straight to the classroom.
-  const strands: Strand[] =
-    opts.skipDiagnostic && kind === "teach"
-      ? []
-      : [...diagnosticStrands(topic.id, edges).map((id) => ({ topicId: id, name: names.get(id)! })), { topicId: topic.id, name: topic.name }];
+  // A prerequisite is only probed when there are notes to ask from; a syllabus line is not material.
+  const prerequisites: Strand[] = [];
+  if (!(opts.skipDiagnostic && kind === "teach")) {
+    for (const id of diagnosticStrands(topic.id, edges)) {
+      const prereq = { name: names.get(id)!, courseId: topic.courseId };
+      if ((await topicPassages(student.id, prereq, 1)).fromNotes) prerequisites.push({ topicId: id, name: prereq.name });
+    }
+  }
+  const strands: Strand[] = opts.skipDiagnostic && kind === "teach" ? [] : [...prerequisites, { topicId: topic.id, name: topic.name }];
   const session = await db.createSession(student.id, topic.id, defaultPersonas(student.major, opts.withRolePlayer), strands, kind);
   if (session.stage === "teach") await openClassroom(session);
+  // The first question is written here, not while the page renders.
+  else await currentDiagnosticItem(session);
   return session;
 }
 
@@ -155,7 +162,12 @@ async function openClassroom(session: db.SessionRow, start?: StrandResult | null
 
 // ---- diagnostic -----------------------------------------------------------------------
 
-/** Returns the open question, creating (and committing) the next one if needed. */
+/** The question waiting for an answer, if any. Read-only, so pages can call it while rendering. */
+export async function openDiagnosticItem(session: db.SessionRow) {
+  return (await db.listItems(session.id)).find((i) => i.score === null) ?? null;
+}
+
+/** Returns the open question, creating (and committing) the next one if needed. Call from actions, not renders. */
 export async function currentDiagnosticItem(session: db.SessionRow) {
   const items = await db.listItems(session.id);
   const open = items.find((i) => i.score === null);
@@ -163,9 +175,10 @@ export async function currentDiagnosticItem(session: db.SessionRow) {
   const next = nextQuestion(session.strands, items);
   if (!next) return null;
   const topic = (await db.getTopic(session.studentId, next.strand.topicId))!;
-  const { passages } = await topicPassages(session.studentId, topic);
+  const { passages, fromNotes } = await topicPassages(session.studentId, topic);
   const asked = items.filter((i) => i.topicId === next.strand.topicId).map((i) => i.question);
-  const q = await makeQuestion(next.strand.name, next.level, passages, asked);
+  // Questions come from notes only. Syllabus policy lines ("all graded work must be your own") make nonsense questions.
+  const q = await makeQuestion(next.strand.name, next.level, fromNotes ? passages : [], asked);
   if (!q) {
     // Nothing in the materials to ask from: record it as untested and move on.
     return db.commitItem(session.id, {
@@ -186,6 +199,7 @@ export async function answerDiagnostic(session: db.SessionRow, itemId: string, a
   const grade = await gradeAnswer(item.question, item.answerKey, passage?.text ?? "", answer);
   await db.gradeItem(item.id, { answer, confidence, score: grade.score, rationale: grade.rationale });
   if (!nextQuestion(session.strands, await db.listItems(session.id))) await finishDiagnostic(session);
+  else await currentDiagnosticItem(session);
   return { score: grade.score, rationale: grade.rationale, answerKey: item.answerKey, source: passage ? `${passage.filename}${passage.page ? ` p.${passage.page}` : ""}` : null };
 }
 

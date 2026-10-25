@@ -8,12 +8,12 @@ export function MarketingNav() {
           ready
         </Link>
         <nav className="hidden items-center gap-7 text-[0.94rem] text-[#2a2a2a] md:flex" aria-label="Marketing">
-          <a href="/#how" className="hover:text-[#111]">
+          <Link href="/#how" className="hover:text-[#111]">
             Workflow
-          </a>
-          <a href="/#teach" className="hover:text-[#111]">
+          </Link>
+          <Link href="/#teach" className="hover:text-[#111]">
             How it works
-          </a>
+          </Link>
         </nav>
         <div className="flex items-center gap-2.5">
           <Link href="/login" className="rounded-[10px] bg-[#f0eeea] px-3.5 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-[#e7e4de]">

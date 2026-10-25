@@ -67,6 +67,17 @@ export async function answerDiagnosticAction(sessionId: string, itemId: string, 
   return { view: await lessonView(await fresh(sessionId)) };
 }
 
+/** Writes the next probe question when none is waiting (e.g. a session opened before it was prepared). */
+export async function nextQuestionAction(sessionId: string): Promise<ActionResult> {
+  const { session } = await load(sessionId);
+  try {
+    if (session.stage === "diagnostic") await lesson.currentDiagnosticItem(session);
+  } catch (err) {
+    return { view: await lessonView(session), error: message(err) };
+  }
+  return { view: await lessonView(await fresh(sessionId)) };
+}
+
 export async function skipDiagnosticAction(sessionId: string): Promise<ActionResult> {
   const { session } = await load(sessionId);
   await lesson.skipDiagnostic(session);

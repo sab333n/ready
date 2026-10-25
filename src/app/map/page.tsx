@@ -5,7 +5,10 @@ import { Studio } from "@/components/studio";
 import { buttonClass, Card, secondaryButtonClass } from "@/components/ui";
 import { deleteMyData, signOut } from "@/app/auth/actions";
 import { currentStudent } from "@/lib/auth/session";
-import { getGoals, semesterMap, type MapCourse, type MapDeadline } from "@/lib/db/repo";
+import { startLessonAction } from "@/app/session/actions";
+import { studentEvidence } from "@/lib/db/lessons";
+import { getGoals, semesterMap, type MapCourse, type MapDeadline, type MapTopic } from "@/lib/db/repo";
+import { deadlineReadiness, deadlineTopics, LEVEL_LABEL, topicReadiness, type DeadlineReadiness, type Level } from "@/lib/readiness";
 import { localDateKey, zonedDate } from "@/lib/time";
 import { AddDeadline } from "./AddDeadline";
 
@@ -23,13 +26,19 @@ async function SemesterMap() {
   const student = await currentStudent();
   if (!student) redirect("/");
   if (!student.onboardingDoneAt) redirect("/onboarding");
-  const [{ courses, deadlines, topics }, goals] = await Promise.all([semesterMap(student.id), getGoals(student.id)]);
+  const [{ courses, deadlines, topics }, goals, evidence] = await Promise.all([semesterMap(student.id), getGoals(student.id), studentEvidence(student.id)]);
   const tz = student.timezone;
   const now = new Date();
   const courseById = new Map(courses.map((c) => [c.id, c]));
   const upcoming = deadlines.filter((d) => d.dueAt >= startOfToday(now, tz));
   const past = deadlines.length - upcoming.length;
   const weeks = groupByWeek(upcoming, tz);
+  const byTopic = new Map(topics.map((t) => [t.id, topicReadiness(t.id, evidence, now)]));
+  const readiness = new Map(upcoming.map((d) => [d.id, deadlineReadiness(deadlineTopics(d, topics), byTopic)]));
+  const topicById = new Map(topics.map((t) => [t.id, t]));
+  // The nearest test in the next three weeks that Ready can say something about.
+  const next = upcoming.find((d) => readiness.get(d.id) && d.dueAt.getTime() - now.getTime() < 21 * 864e5);
+  const rolePlayer = /nurs|pharm|health/i.test(student.major ?? "");
 
   return (
     <Studio>
@@ -54,6 +63,17 @@ async function SemesterMap() {
         )}
       </div>
 
+      {next && (
+        <UpNext
+          d={next}
+          r={readiness.get(next.id)!}
+          course={next.courseId ? courseById.get(next.courseId) : undefined}
+          topicById={topicById}
+          now={now}
+          rolePlayer={rolePlayer}
+        />
+      )}
+
       {deadlines.length === 0 ? (
         <Card>
           <p>No deadlines yet.</p>
@@ -68,7 +88,7 @@ async function SemesterMap() {
               <h2 className="mb-1.5 text-xs font-semibold tracking-wide text-muted uppercase">{label}</h2>
               <ul className="flex flex-col gap-1.5">
                 {items.map((d) => (
-                  <DeadlineRow key={d.id} d={d} course={d.courseId ? courseById.get(d.courseId) : undefined} tz={tz} />
+                  <DeadlineRow key={d.id} d={d} course={d.courseId ? courseById.get(d.courseId) : undefined} tz={tz} readiness={readiness.get(d.id) ?? null} />
                 ))}
               </ul>
             </li>
@@ -122,7 +142,89 @@ async function SemesterMap() {
   );
 }
 
-function DeadlineRow({ d, course, tz }: { d: MapDeadline; course?: MapCourse; tz: string }) {
+const LEVEL_COLOR: Record<Level, string> = {
+  not_ready: "var(--red)",
+  unmeasured: "var(--muted)",
+  getting_there: "var(--yellow)",
+  ready: "var(--green)",
+};
+
+function ReadinessChip({ level }: { level: Level }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-xs" style={{ color: LEVEL_COLOR[level] }}>
+      <span className="size-1.5 rounded-full" style={{ background: LEVEL_COLOR[level] }} />
+      {LEVEL_LABEL[level]}
+    </span>
+  );
+}
+
+function UpNext({
+  d,
+  r,
+  course,
+  topicById,
+  now,
+  rolePlayer,
+}: {
+  d: MapDeadline;
+  r: DeadlineReadiness;
+  course?: MapCourse;
+  topicById: Map<string, MapTopic>;
+  now: Date;
+  rolePlayer: boolean;
+}) {
+  const days = Math.max(0, Math.ceil((d.dueAt.getTime() - now.getTime()) / 864e5));
+  const when = days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`;
+  const nextTopic = r.next ? topicById.get(r.next.topicId) : undefined;
+  const verdict =
+    r.level === "ready"
+      ? "Every topic it covers held up when you taught it. Keep it fresh with a short practice."
+      : r.level === "not_ready"
+        ? `${nextTopic?.name ?? "One topic"} didn't hold up yet. Teach it before the ${KIND_LABEL[d.kind].toLowerCase()}.`
+        : r.level === "unmeasured"
+          ? `Ready hasn't seen you explain ${nextTopic?.name ?? "these topics"} yet. A 10-minute session tells you where you stand.`
+          : `Close. ${nextTopic?.name ?? "One topic"} is the shakiest part.`;
+  return (
+    <Card className="flex flex-col gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold tracking-wide text-muted uppercase">Up next · {when}</p>
+          <h2 className="mt-1 text-lg font-semibold">{d.title}</h2>
+          <p className="text-xs text-muted">{course?.displayCode ?? "Other"}</p>
+        </div>
+        <ReadinessChip level={r.level} />
+      </div>
+      <p className="text-sm">{verdict}</p>
+      <ul className="flex flex-wrap gap-1.5">
+        {r.topics.map((t) => (
+          <li key={t.topicId} className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-0.5 text-xs">
+            <span className="size-1.5 rounded-full" style={{ background: LEVEL_COLOR[t.level] }} />
+            {topicById.get(t.topicId)?.name}
+            {t.score !== null && <span className="text-muted">{t.score}</span>}
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-muted">
+        {r.measured} of {r.topics.length} topics measured.
+      </p>
+      {nextTopic ? (
+        <form action={startLessonAction} className="flex flex-wrap gap-2">
+          <input type="hidden" name="topicId" value={nextTopic.id} />
+          {rolePlayer && <input type="hidden" name="rolePlayer" value="on" />}
+          <button className={buttonClass}>Teach {nextTopic.name}</button>
+        </form>
+      ) : (
+        <form action={startLessonAction}>
+          <input type="hidden" name="topicId" value={r.topics[0].topicId} />
+          <input type="hidden" name="kind" value="practice" />
+          <button className={secondaryButtonClass}>Practice {topicById.get(r.topics[0].topicId)?.name}</button>
+        </form>
+      )}
+    </Card>
+  );
+}
+
+function DeadlineRow({ d, course, tz, readiness }: { d: MapDeadline; course?: MapCourse; tz: string; readiness: DeadlineReadiness | null }) {
   const date = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "short", month: "short", day: "numeric" }).format(d.dueAt);
   const time = d.allDay ? null : new Intl.DateTimeFormat("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" }).format(d.dueAt);
   return (
@@ -138,6 +240,7 @@ function DeadlineRow({ d, course, tz }: { d: MapDeadline; course?: MapCourse; tz
           {d.source !== "ics" ? ` · from ${d.source === "upload" ? "your files" : "you"}` : ""}
         </div>
       </div>
+      {readiness && <ReadinessChip level={readiness.level} />}
     </li>
   );
 }

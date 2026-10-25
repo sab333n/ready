@@ -250,7 +250,8 @@ export async function reflectOnTeaching(topic: string, passages: Passage[], turn
           const o = Math.max(termOverlap(k.point, t.text), ...sentencesOf(t.text).map((s) => termOverlap(k.point, s)));
           if (!best || o > best.o) best = { t, o };
         }
-        const graded = best ? offlineGrade(k.point, best.t.text) : null;
+        // Grade the one matching sentence: another sentence in the same turn can carry the flipped word legitimately.
+        const graded = best ? offlineGrade(k.point, bestSentence(k.point, best.t.text)) : null;
         const verdict = !best || best.o < 0.3 ? "skipped" : graded && graded.score <= 2 ? "wrong" : "correct";
         return {
           point: k.point,

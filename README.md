@@ -10,10 +10,14 @@ deadline known → readiness measured → plan made → student teaches AI stude
 | Phase | What | State |
 |---|---|---|
 | 1 | Onboarding + semester map | **Built** |
-| 2 | Teaching classroom (voice, AI students, teach-back) | Not started |
-| 3 | Readiness map + weekly plan | Not started |
+| 2 | Teaching classroom (probe, AI students, teach-back, reflection, voice) | **Built** |
+| 3 | Readiness per topic and per exam, "Up next" on the semester page | **Built** (weekly plan not started) |
 | 4 | Text assistant (Twilio) | STOP/START/HELP only |
 | 5 | Advisor dashboard + demo seed | Not started |
+
+Readiness is derived from evidence, never stored: every probe answer, teaching session and teach-back writes a
+`topic_scores` row, and `src/lib/readiness.ts` weighs them by source and recency (14-day half-life). An exam or quiz
+covers the topics its title names plus what they build on; an exam that names none covers the whole course.
 
 ## Run it
 
@@ -33,6 +37,7 @@ Open http://localhost:3000, continue with Google or create an account, finish th
 
 - **Sign-in:** the front page leads to Google (Supabase Auth, same provider setup as Interlink) or an email and password stored in this app's database. Google needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Add `http://localhost:3000/auth/callback` to the Supabase redirect allow list.
 - **AI reading:** `LLM_PROVIDER=gemini` plus `GEMINI_API_KEY` uses Gemini to read syllabi and screenshots, and to run questions, grading, and the classroom. `none` uses an offline parser for PDFs; screenshots need the AI reader. `anthropic` is the Claude alternative.
+- **When a model is out of quota:** Gemini calls try `LLM_MODEL`, then each of `LLM_FALLBACK_MODELS` (default `gemini-3.5-flash-lite`). A model that returns 429/503/404 is skipped for a while, so one exhausted quota doesn't slow every call. If every model fails, each step falls back to the offline engine, and the session keeps going.
 
 ## Tests
 
@@ -47,13 +52,15 @@ npm run lint && npm run typecheck
 prompts/                     versioned LLM prompts (<name>.v<N>.md)
 supabase/migrations/         SQL schema, one file per phase
 scripts/                     migrate, demo fixtures
-src/lib/llm/                 provider-agnostic LLM interface (Claude today)
+src/lib/llm/                 provider-agnostic LLM interface (Gemini or Claude), model fallback
 src/lib/onboarding/flow.ts   onboarding state machine (pure, tested)
 src/lib/calendar/ics.ts      Canvas / Moodle / Blackboard .ics parsing
 src/lib/materials/           PDF text, AI extraction, offline parser
+src/lib/lesson/service.ts    lesson orchestration: probe → teach → teach-back → reflection
+src/lib/readiness.ts         readiness from evidence; which topics an exam covers (pure, tested)
 src/lib/sms/                 phone numbers, STOP/START/HELP, Twilio signatures
 src/lib/db/repo.ts           all SQL, always scoped by student
-src/app/                     pages: / → /onboarding → /connect → /map
+src/app/                     pages: / → /onboarding → /connect → /map → /learn → /session/[id]
 ```
 
 ## Ground rules baked in

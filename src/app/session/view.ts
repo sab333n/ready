@@ -1,6 +1,6 @@
 import * as db from "@/lib/db/lessons";
 import { PERSONAS } from "@/lib/classroom/personas";
-import { currentDiagnosticItem, diagnosticResults, topicPassages } from "@/lib/lesson/service";
+import { diagnosticResults, openDiagnosticItem, topicPassages } from "@/lib/lesson/service";
 import type { StrandResult } from "@/lib/diagnostic/engine";
 import { lessonPlan, type PlanNode } from "@/lib/learn/plan";
 import { voiceEnabled } from "@/lib/voice/tokens";
@@ -29,7 +29,7 @@ export type LessonView = {
 
 export async function lessonView(session: db.SessionRow): Promise<LessonView> {
   const topic = (await db.getTopic(session.studentId, session.topicId))!;
-  const current = session.stage === "diagnostic" ? await currentDiagnosticItem(session) : null;
+  const current = session.stage === "diagnostic" ? await openDiagnosticItem(session) : null;
   const items = await db.listItems(session.id);
   const strandName = (id: string) => session.strands.find((s) => s.topicId === id)?.name ?? topic.name;
   const { fromNotes, passages } = await topicPassages(session.studentId, topic, 3);

@@ -43,35 +43,77 @@ function geminiSchema(node: unknown, map = false): unknown {
   return out;
 }
 
-export function geminiProvider(model: string): LlmProvider {
+// Models that just failed are skipped for a while, so one exhausted quota doesn't
+// slow every later call down with a doomed request.
+const COOLDOWN_MS = { quota: 10 * 60_000, busy: 60_000, gone: 24 * 60 * 60_000 } as const;
+const downUntil = new Map<string, number>();
+
+type Failure = keyof typeof COOLDOWN_MS;
+
+/** Why a Gemini call failed, when trying another model could help. */
+export function geminiFailure(err: unknown): Failure | null {
+  const status = (err as { status?: unknown })?.status;
+  const text = err instanceof Error ? err.message : String(err);
+  if (status === 429 || /RESOURCE_EXHAUSTED|"code":\s*429/.test(text)) return "quota";
+  if (status === 500 || status === 503 || status === 504 || /UNAVAILABLE|DEADLINE_EXCEEDED|"code":\s*50[034]|timed? ?out|aborted/i.test(text)) return "busy";
+  if (status === 404 || /NOT_FOUND|"code":\s*404/.test(text)) return "gone";
+  return null;
+}
+
+/** Healthy models first, in configured order; cooling-down ones only as a last resort. */
+export function modelOrder(models: string[], now = Date.now()): string[] {
+  const unique = [...new Set(models)];
+  const up = unique.filter((m) => (downUntil.get(m) ?? 0) <= now);
+  return up.length ? up : unique;
+}
+
+export function markModelDown(model: string, failure: Failure, now = Date.now()) {
+  downUntil.set(model, now + COOLDOWN_MS[failure]);
+}
+
+export function resetModelHealthForTesting() {
+  downUntil.clear();
+}
+
+export function geminiProvider(model: string, fallbacks: string[] = []): LlmProvider {
   if (!env.geminiApiKey) throw new LlmError("Set GEMINI_API_KEY to use the Gemini reader.");
-  const ai = new GoogleGenAI({ apiKey: env.geminiApiKey });
+  const ai = new GoogleGenAI({ apiKey: env.geminiApiKey, httpOptions: { timeout: 45_000 } });
   return {
     name: `gemini:${model}`,
     async generateObject<T extends z.ZodType>(req: GenerateObjectRequest<T>) {
       let response;
-      try {
-        response = await ai.models.generateContent({
-          model,
-          contents: [
-            {
-              role: "user",
-              parts: [
-                ...(req.images ?? []).map((img) => ({ inlineData: { mimeType: img.mediaType, data: img.base64 } })),
-                { text: req.prompt },
-              ],
+      let lastError: unknown;
+      for (const candidate of modelOrder([model, ...fallbacks])) {
+        try {
+          response = await ai.models.generateContent({
+            model: candidate,
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  ...(req.images ?? []).map((img) => ({ inlineData: { mimeType: img.mediaType, data: img.base64 } })),
+                  { text: req.prompt },
+                ],
+              },
+            ],
+            config: {
+              systemInstruction: req.system,
+              responseMimeType: "application/json",
+              responseJsonSchema: geminiSchema(req.schema.toJSONSchema()),
+              maxOutputTokens: req.maxTokens ?? 8000,
+              thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
             },
-          ],
-          config: {
-            systemInstruction: req.system,
-            responseMimeType: "application/json",
-            responseJsonSchema: geminiSchema(req.schema.toJSONSchema()),
-            maxOutputTokens: req.maxTokens ?? 8000,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
-          },
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Gemini request failed.";
+          });
+          break;
+        } catch (err) {
+          lastError = err;
+          const failure = geminiFailure(err);
+          if (!failure) break;
+          markModelDown(candidate, failure);
+        }
+      }
+      if (!response) {
+        const message = lastError instanceof Error ? lastError.message : "Gemini request failed.";
         throw new LlmError(message.slice(0, 300));
       }
       const text = response.text;

@@ -2,12 +2,14 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PlanMap } from "@/components/plan-map";
 import { EDGE_LABEL } from "@/lib/diagnostic/engine";
 import { useDictation } from "@/app/onboarding/useDictation";
 import {
   answerDiagnosticAction,
   finishAction,
+  nextQuestionAction,
   sayAction,
   setModeAction,
   skipDiagnosticAction,
@@ -24,6 +26,15 @@ export function Lesson({ initial }: { initial: LessonView }) {
   const [error, setError] = useState<string | null>(null);
   const [planOpen, setPlanOpen] = useState(true);
   const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const shownStage = useRef(initial.stage);
+
+  // The sidebar is rendered on the server; refresh it when the session moves to a new stage.
+  useEffect(() => {
+    if (shownStage.current === view.stage) return;
+    shownStage.current = view.stage;
+    router.refresh();
+  }, [view.stage, router]);
 
   function run(action: () => Promise<ActionResult>, after?: (r: ActionResult) => void) {
     setError(null);
@@ -96,11 +107,20 @@ type RunFn = (action: () => Promise<ActionResult>, after?: (r: ActionResult) => 
 
 function Probe({ view, pending, run }: { view: LessonView; pending: boolean; run: RunFn }) {
   const [answer, setAnswer] = useState("");
-  const [confidence, setConfidence] = useState(58);
+  const [confidence, setConfidence] = useState(50);
+  // An untouched slider says nothing about confidence; only a deliberate setting counts.
+  const [rated, setRated] = useState(false);
   const [unknown, setUnknown] = useState(false);
   const dictation = useDictation(setAnswer);
   const q = view.diagnostic.current;
   const last = view.diagnostic.answered.at(-1);
+  const asked = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (q || pending || asked.current === view.id) return;
+    asked.current = view.id;
+    run(() => nextQuestionAction(view.id));
+  }, [q, pending, run, view.id]);
 
   return (
     <article className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-6 py-6 md:px-10">
@@ -123,10 +143,12 @@ function Probe({ view, pending, run }: { view: LessonView; pending: boolean; run
           onSubmit={(e) => {
             e.preventDefault();
             const text = unknown ? "I don't know" : answer;
-            run(() => answerDiagnosticAction(view.id, q.id, text, confidence >= 50 && !unknown ? "sure" : "unsure"), () => {
+            const stance = unknown ? "unsure" : rated ? (confidence >= 50 ? "sure" : "unsure") : null;
+            run(() => answerDiagnosticAction(view.id, q.id, text, stance), () => {
               setAnswer("");
               setUnknown(false);
-              setConfidence(58);
+              setConfidence(50);
+              setRated(false);
             });
           }}
         >
@@ -146,7 +168,7 @@ function Probe({ view, pending, run }: { view: LessonView; pending: boolean; run
           <div className="mt-4">
             <div className="flex items-center justify-between text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">
               <span>Confidence</span>
-              <span className="text-gold">{unknown ? "—" : `${confidence}%`}</span>
+              <span className="text-gold">{unknown || !rated ? "—" : `${confidence}%`}</span>
             </div>
             <input
               type="range"
@@ -155,8 +177,11 @@ function Probe({ view, pending, run }: { view: LessonView; pending: boolean; run
               value={confidence}
               disabled={unknown}
               aria-label="Confidence"
-              onChange={(e) => setConfidence(Number(e.target.value))}
-              className="mt-2 w-full accent-[var(--gold)]"
+              onChange={(e) => {
+                setConfidence(Number(e.target.value));
+                setRated(true);
+              }}
+              className={`mt-2 w-full accent-[var(--gold)] ${rated ? "" : "opacity-50"}`}
             />
           </div>
           <label className="mt-4 block text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">
@@ -233,7 +258,8 @@ function Classroom({
   setError: (e: string | null) => void;
 }) {
   const [draft, setDraft] = useState("");
-  const [confidence, setConfidence] = useState(62);
+  const [confidence, setConfidence] = useState(50);
+  const [rated, setRated] = useState(false);
   const dictation = useDictation(setDraft);
   const bottom = useRef<HTMLDivElement>(null);
   const voice = useVoiceClass({ view, onView: setView, onError: setError });
@@ -248,7 +274,10 @@ function Classroom({
   function send(text: string) {
     if (!text.trim()) return;
     setDraft("");
-    run(() => sayAction(view.id, text, confidence >= 50 ? "sure" : "unsure"), (r) => r.voice && voice.speak(r.voice.speaker, text, r.voice.note));
+    // Unrated turns get the Sure / Unsure buttons afterwards instead of a guessed tag.
+    const stance = rated ? (confidence >= 50 ? "sure" : "unsure") : null;
+    setRated(false);
+    run(() => sayAction(view.id, text, stance), (r) => r.voice && voice.speak(r.voice.speaker, text, r.voice.note));
   }
 
   return (
@@ -364,8 +393,19 @@ function Classroom({
               <div className="mt-2 flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 text-[11px] font-semibold tracking-[0.14em] text-muted uppercase">
                   Confidence
-                  <input type="range" min={0} max={100} value={confidence} aria-label="Confidence" onChange={(e) => setConfidence(Number(e.target.value))} className="accent-[var(--gold)]" />
-                  <span className="text-gold">{confidence}%</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={100}
+                    value={confidence}
+                    aria-label="Confidence"
+                    onChange={(e) => {
+                      setConfidence(Number(e.target.value));
+                      setRated(true);
+                    }}
+                    className={`accent-[var(--gold)] ${rated ? "" : "opacity-50"}`}
+                  />
+                  <span className="text-gold">{rated ? `${confidence}%` : "—"}</span>
                 </label>
                 {dictation.supported && (
                   <button type="button" className="rounded-full border border-border px-3 py-1 text-xs text-muted" onClick={dictation.listening ? dictation.stop : dictation.start}>

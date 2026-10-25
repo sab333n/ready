@@ -282,3 +282,11 @@ export async function sessionScores(sessionId: string) {
     from topic_scores ts join topics t on t.id = ts.topic_id
     where ts.session_id = ${sessionId} order by ts.created_at`;
 }
+
+/** Recent evidence for readiness, newest first. */
+export async function studentEvidence(studentId: string) {
+  return sql<{ topicId: string; source: "diagnostic" | "teach" | "teach_back" | "practice"; score: number; confidentWrong: boolean; createdAt: Date }[]>`
+    select topic_id, source, score, confident_wrong, created_at from topic_scores
+    where student_id = ${studentId} and created_at > now() - interval '120 days'
+    order by created_at desc`;
+}

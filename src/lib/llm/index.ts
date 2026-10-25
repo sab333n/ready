@@ -11,7 +11,7 @@ let override: LlmProvider | null | undefined;
 export function getLlm(): LlmProvider | null {
   if (override !== undefined) return override;
   if (env.llmProvider === "anthropic") return anthropicProvider(env.llmModel);
-  if (env.llmProvider === "gemini") return geminiProvider(env.llmModel);
+  if (env.llmProvider === "gemini") return geminiProvider(env.llmModel, env.llmFallbackModels);
   return null;
 }
 

@@ -46,7 +46,7 @@ export function offlineGrade(answerKey: string, answer: string) {
 
 export function offlinePersonaLine(persona: PersonaId, learnerText: string, passages: Passage[], turnIndex: number): string {
   const keyword = pickKeyword(learnerText) ?? "that";
-  const snippet = passages[turnIndex % Math.max(passages.length, 1)]?.text.split(/(?<=[.!?])\s/)[0]?.slice(0, 120);
+  const snippet = clip(sentencesOf(passages[turnIndex % Math.max(passages.length, 1)]?.text ?? "")[0] ?? "", 160);
   const lines: Record<PersonaId, string[]> = {
     maya: [
       `Okay, can you say that more simply? What does "${keyword}" actually mean?`,
@@ -161,6 +161,12 @@ function hintOf(sentence: string): string {
   const words = [...new Set(sentence.match(/\b[a-zA-Z][a-zA-Z-]{5,}\b/g) ?? [])].filter((w) => terms(w).length > 0);
   const picked = words.sort((a, b) => b.length - a.length).slice(0, 3).map((w) => w.toLowerCase());
   return `think about ${picked.join(", ")}`;
+}
+
+/** Shortens at a word boundary so quotes don't end mid-word. */
+function clip(text: string, max: number): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, text.lastIndexOf(" ", max)).replace(/[,;:]$/, "")}…`;
 }
 
 function pickKeyword(text: string): string | null {

@@ -107,6 +107,26 @@ describe("prerequisite map", () => {
   });
 });
 
+describe("diagnostic material", () => {
+  it("only probes prerequisites that have notes, never syllabus lines", async () => {
+    setLlmForTesting({
+      name: "fake-prereq",
+      async generateObject(req) {
+        if (req.promptId !== "prereq-map.v1") throw new Error("offline please");
+        const key = (name: string) => req.prompt.match(new RegExp(`(T\\d+): ${name}`))![1];
+        return { edges: [{ topic: key("Respiratory Drugs"), prerequisite: key("Autonomic Nervous System Drugs"), reason: "receptors" }] } as never;
+      },
+    });
+    await learnOverview(student);
+    const [resp] = await sql<{ id: string }[]>`select id from topics where name = 'Respiratory Drugs'`;
+    const session = await startLesson(student, resp.id, { withRolePlayer: false });
+    expect(session.strands.map((s) => s.name)).toEqual(["Respiratory Drugs"]);
+    // The first question is written when the session starts, from the outline Ready wrote.
+    const [item] = await db.listItems(session.id);
+    expect(item.answerKey).not.toMatch(/graded work/i);
+  });
+});
+
 describe("a full lesson on cardiac drugs (acceptance)", () => {
   it("diagnoses prerequisites, teaches, catches the planted mistake, and scores each topic", async () => {
     setLlmForTesting(prereqOnly);
