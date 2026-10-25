@@ -125,6 +125,9 @@ export async function ensureStudyOutline(studentId: string, topic: { id: string;
 export async function startLesson(student: Who, topicId: string, opts: { withRolePlayer: boolean; skipDiagnostic?: boolean; kind?: db.SessionKind }) {
   const topic = await db.getTopic(student.id, topicId);
   if (!topic) throw new Error("Topic not found");
+  // Picking a topic again picks up where the student left off.
+  const open = await db.openSessionFor(student.id, topic.id, opts.kind ?? "teach");
+  if (open) return open;
   await ensureStudyOutline(student.id, topic);
   const topics = await db.courseTopics(student.id, topic.courseId);
   const edges = await db.courseEdges(topic.courseId);
@@ -140,7 +143,12 @@ export async function startLesson(student: Who, topicId: string, opts: { withRol
       if ((await topicPassages(student.id, prereq, 1)).fromNotes) prerequisites.push({ topicId: id, name: prereq.name });
     }
   }
-  const strands: Strand[] = opts.skipDiagnostic && kind === "teach" ? [] : [...prerequisites, { topicId: topic.id, name: topic.name }];
+  let strands: Strand[] = opts.skipDiagnostic && kind === "teach" ? [] : [...prerequisites, { topicId: topic.id, name: topic.name }];
+  // A teaching session doesn't re-probe what was measured in the last few days; practice always asks.
+  if (kind === "teach") {
+    const recent = await db.recentlyMeasured(student.id, strands.map((s) => s.topicId));
+    strands = strands.filter((s) => !recent.has(s.topicId));
+  }
   const session = await db.createSession(student.id, topic.id, defaultPersonas(student.major, opts.withRolePlayer), strands, kind);
   if (session.stage === "teach") await openClassroom(session);
   // The first question is written here, not while the page renders.
@@ -153,11 +161,26 @@ async function openClassroom(session: db.SessionRow, start?: StrandResult | null
   const list = session.personas.map((p) => PERSONAS[p].name);
   const names = list.length > 1 ? `${list.slice(0, -1).join(", ")} and ${list.at(-1)}` : list[0];
   const advice = start && start.topicId !== session.topicId ? ` Your diagnostic suggests starting with ${start.name}, since ${topic.name} builds on it.` : "";
+  const memory = await classroomMemory(session);
+  const points = memory?.focus.map((f, i) => `(${i + 1}) ${f.replace(/[.\s]+$/, "")}`).join(" ");
+  const recap = memory ? ` Last time (${memory.when}) you explained ${memory.score}% of the key points. The class will come back to what didn't land: ${points}.` : "";
   await db.addTurn(session.id, {
     stage: "teach",
     speaker: "system",
-    text: `Teach ${names} about ${topic.name}. Explain it in your own words; they'll ask questions and push back. Tap Sure or Unsure after you explain a key point.${advice}`,
+    text: `Teach ${names} about ${topic.name}. Explain it in your own words; they'll ask questions and push back. Tap Sure or Unsure after you explain a key point.${advice}${recap}`,
   });
+}
+
+/** What the class remembers from the last finished session on this topic: the points that didn't land. */
+export async function classroomMemory(session: Pick<db.SessionRow, "id" | "studentId" | "topicId">) {
+  const last = await db.lastReflection(session.studentId, session.topicId, session.id);
+  if (!last) return null;
+  const r = last.reflection as Reflection;
+  const missed = r.keyPoints.filter((k) => k.verdict !== "correct").map((k) => k.point);
+  const focus = [...(r.mistake && !r.mistake.caught ? [r.mistake.correction] : []), ...missed].slice(0, 2);
+  if (focus.length === 0) return null;
+  const days = Math.floor((Date.now() - new Date(last.endedAt).getTime()) / 864e5);
+  return { focus, score: r.teachScore, when: days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago` };
 }
 
 // ---- diagnostic -----------------------------------------------------------------------
@@ -264,6 +287,12 @@ export async function learnerSays(session: db.SessionRow, text: string, confiden
   let cue: string | null = null;
   let offlineText: string | undefined;
   let caught: boolean | undefined;
+
+  if (session.stage === "teach" && turns.filter((t) => t.speaker === "learner").length === 1) {
+    const memory = await classroomMemory(session);
+    if (memory) offlineText = `Last time we never really got to this part. Can you explain it? "${memory.focus[0]}"`;
+    if (memory) cue = `You were in this class last time. After reacting to what the teacher said, ask them to explain this, which they skipped or got wrong last time: "${memory.focus[0]}". Don't say it was wrong; just ask.`;
+  }
 
   if (session.stage === "teach_back") {
     const outcome = await teachBackFollowUp(session, turns);

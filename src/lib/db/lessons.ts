@@ -124,6 +124,36 @@ export async function getSession(studentId: string, sessionId: string) {
   return s ?? null;
 }
 
+/** An unfinished session on this topic from the last week, so picking the topic again resumes it. */
+export async function openSessionFor(studentId: string, topicId: string, kind: SessionKind) {
+  const [s] = await sql<SessionRow[]>`
+    select * from sessions
+    where student_id = ${studentId} and topic_id = ${topicId} and type = ${kind} and stage <> 'done'
+      and started_at > now() - interval '7 days'
+    order by started_at desc limit 1`;
+  return s ?? null;
+}
+
+/** The most recent finished teaching session's reflection on a topic: what the classroom remembers. */
+export async function lastReflection(studentId: string, topicId: string, excludeSessionId?: string) {
+  const [s] = await sql<{ reflection: unknown; endedAt: Date }[]>`
+    select reflection, ended_at from sessions
+    where student_id = ${studentId} and topic_id = ${topicId} and type = 'teach' and stage = 'done' and reflection is not null
+      and id <> ${excludeSessionId ?? "00000000-0000-0000-0000-000000000000"}
+    order by ended_at desc limit 1`;
+  return s ?? null;
+}
+
+/** Topics with evidence from the last few days: the probe doesn't re-ask what it just measured. */
+export async function recentlyMeasured(studentId: string, topicIds: string[], days = 3) {
+  if (topicIds.length === 0) return new Map<string, number>();
+  const rows = await sql<{ topicId: string; score: number }[]>`
+    select distinct on (topic_id) topic_id, score from topic_scores
+    where student_id = ${studentId} and topic_id = any(${topicIds}::uuid[]) and created_at > now() - make_interval(days => ${days})
+    order by topic_id, created_at desc`;
+  return new Map(rows.map((r) => [r.topicId, r.score]));
+}
+
 export async function setStage(sessionId: string, stage: Stage) {
   await sql`update sessions set stage = ${stage}, ended_at = ${stage === "done" ? new Date() : null} where id = ${sessionId}`;
 }

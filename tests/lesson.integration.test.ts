@@ -127,6 +127,31 @@ describe("diagnostic material", () => {
   });
 });
 
+describe("memory across sessions", () => {
+  it("resumes an unfinished session, skips a probe it just ran, and brings back what was missed", async () => {
+    const topicId = await cardiacTopicId();
+    const first = await startLesson(student, topicId, { withRolePlayer: false });
+    expect(first.stage).toBe("diagnostic");
+    expect((await startLesson(student, topicId, { withRolePlayer: false })).id).toBe(first.id);
+
+    for (let item = await currentDiagnosticItem(first); item; item = await currentDiagnosticItem(first)) {
+      await answerDiagnostic(first, item.id, item.answerKey, "sure");
+    }
+    const teaching = (await db.getSession(student.id, first.id))!;
+    await learnerSays(teaching, "Beta blockers lower heart rate.", "sure");
+    await finishLesson((await db.getSession(student.id, first.id))!);
+
+    // Measured minutes ago, so the next session goes straight to teaching and remembers what was skipped.
+    const second = await startLesson(student, topicId, { withRolePlayer: false });
+    expect(second.id).not.toBe(first.id);
+    expect(second.stage).toBe("teach");
+    const [opening] = await db.listTurns(second.id);
+    expect(opening.text).toMatch(/Last time \(today\) you explained \d+% of the key points/);
+    const reply = await learnerSays(second, "Digoxin makes the heart beat stronger.", null);
+    expect(reply.line?.text).toMatch(/Last time we never really got to this part/);
+  });
+});
+
 describe("a full lesson on cardiac drugs (acceptance)", () => {
   it("diagnoses prerequisites, teaches, catches the planted mistake, and scores each topic", async () => {
     setLlmForTesting(prereqOnly);

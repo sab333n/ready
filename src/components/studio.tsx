@@ -28,6 +28,24 @@ export async function Studio({ children, mode = "all" }: { children: React.React
           <Link href="/map" className="text-muted">
             Semester
           </Link>
+          {sessions.length > 0 && (
+            // The sidebar is desktop-only; on a phone, past sessions live here.
+            <details className="group relative ml-auto">
+              <summary className="cursor-pointer list-none text-muted [&::-webkit-details-marker]:hidden">Sessions ({sessions.length})</summary>
+              <ul className="absolute right-0 z-50 mt-2 max-h-[60vh] w-72 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-lg">
+                {sessions.map((s) => (
+                  <li key={s.id}>
+                    <Link href={`/session/${s.id}`} className="block rounded-lg px-2.5 py-2 hover:bg-background">
+                      <div className="truncate text-sm text-foreground">{s.topicName}</div>
+                      <div className="truncate text-xs text-muted">
+                        {s.type === "practice" ? "Practice" : "Teaching"} · {s.when}
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
         </div>
         {children}
       </div>
