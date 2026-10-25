@@ -2,10 +2,12 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Studio } from "@/components/studio";
-import { buttonClass, Card, secondaryButtonClass } from "@/components/ui";
+import { buttonClass, Card, inputClass, secondaryButtonClass } from "@/components/ui";
 import { deleteMyData, signOut } from "@/app/auth/actions";
 import { currentStudent } from "@/lib/auth/session";
 import { startLessonAction } from "@/app/session/actions";
+import { stopSharingAction } from "@/app/join/actions";
+import { studentClasses } from "@/lib/db/classes";
 import { studentEvidence } from "@/lib/db/lessons";
 import { getGoals, semesterMap, type MapCourse, type MapDeadline, type MapTopic } from "@/lib/db/repo";
 import { deadlineReadiness, deadlineTopics, LEVEL_LABEL, topicReadiness, type DeadlineReadiness, type Level } from "@/lib/readiness";
@@ -26,7 +28,12 @@ async function SemesterMap() {
   const student = await currentStudent();
   if (!student) redirect("/");
   if (!student.onboardingDoneAt) redirect("/onboarding");
-  const [{ courses, deadlines, topics }, goals, evidence] = await Promise.all([semesterMap(student.id), getGoals(student.id), studentEvidence(student.id)]);
+  const [{ courses, deadlines, topics }, goals, evidence, classes] = await Promise.all([
+    semesterMap(student.id),
+    getGoals(student.id),
+    studentEvidence(student.id),
+    studentClasses(student.id),
+  ]);
   const tz = student.timezone;
   const now = new Date();
   const courseById = new Map(courses.map((c) => [c.id, c]));
@@ -97,6 +104,40 @@ async function SemesterMap() {
       )}
 
       {courses.length > 0 && <AddDeadline courses={courses} />}
+
+      <Card className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Share with an instructor</h2>
+          <p className="text-sm text-muted">Your instructor can see your readiness for their course, never your notes or what you said. You can stop any time.</p>
+        </div>
+        {classes.length > 0 && (
+          <ul className="flex flex-col gap-2">
+            {classes.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border px-3 py-2 text-sm">
+                <span>
+                  <span className="font-medium">{c.displayCode}</span> · {c.instructor}
+                  <span className={`ml-2 text-xs ${c.sharing ? "text-[var(--green)]" : "text-muted"}`}>{c.sharing ? "Sharing" : "Not sharing"}</span>
+                </span>
+                {c.sharing ? (
+                  <form action={stopSharingAction}>
+                    <input type="hidden" name="classId" value={c.id} />
+                    <button className="text-xs underline">Stop sharing</button>
+                  </form>
+                ) : (
+                  // Sharing again shows the consent wording again.
+                  <Link href={`/join?code=${c.joinCode}`} className="text-xs underline">
+                    Share again
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <form action="/join" className="flex gap-2">
+          <input name="code" required placeholder="Class code, e.g. PHARM-7KQ2" aria-label="Class code" className={`${inputClass} uppercase placeholder:normal-case`} />
+          <button className={secondaryButtonClass}>Next</button>
+        </form>
+      </Card>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Topics by course</h2>

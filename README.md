@@ -13,11 +13,22 @@ deadline known → readiness measured → plan made → student teaches AI stude
 | 2 | Teaching classroom (probe, AI students, teach-back, reflection, voice) | **Built** |
 | 3 | Readiness per topic and per exam, "Up next" on the semester page | **Built** (weekly plan not started) |
 | 4 | Text assistant (Twilio) | STOP/START/HELP only |
-| 5 | Advisor dashboard + demo seed | Not started |
+| 5 | Instructor dashboard (consent-based sharing) + demo seed | **Built** |
 
 Readiness is derived from evidence, never stored: every probe answer, teaching session and teach-back writes a
 `topic_scores` row, and `src/lib/readiness.ts` weighs them by source and recency (14-day half-life). An exam or quiz
 covers the topics its title names plus what they build on; an exam that names none covers the whole course.
+
+### Instructor dashboard
+
+Instructors sign up at `/faculty`, create a class with its Canvas course code, and get a join code (e.g. `PHARM-7KQ2`).
+A student enters the code on their semester page, sees exactly what will be shared, and agrees. The dashboard shows,
+for students whose latest consent is "share": readiness for the next exam, who needs attention and why, topics the class
+is confidently wrong about, and a student × topic heatmap. It reads only scores for that course, never notes, files,
+transcripts or phone numbers. "Stop sharing" takes effect immediately; every consent change is kept as an audit row.
+
+Demo: `npm run seed:demo` creates a fictional PHARM 201 class (24 students, exam in four days). Sign in at `/faculty`
+as `demo-instructor@ready.test` with password `ready-demo-2026` (override with `DEMO_PASSWORD`). Students can join it with `PHARM-DEMO`.
 
 ## Run it
 
@@ -60,7 +71,9 @@ src/lib/lesson/service.ts    lesson orchestration: probe → teach → teach-bac
 src/lib/readiness.ts         readiness from evidence; which topics an exam covers (pure, tested)
 src/lib/sms/                 phone numbers, STOP/START/HELP, Twilio signatures
 src/lib/db/repo.ts           all SQL, always scoped by student
-src/app/                     pages: / → /onboarding → /connect → /map → /learn → /session/[id]
+src/lib/classes/report.ts    instructor view: class readiness, at-risk students, misconceptions (pure, tested)
+src/lib/db/classes.ts        instructors, classes, per-class sharing consent
+src/app/                     pages: / → /onboarding → /connect → /map → /learn → /session/[id]; /faculty for instructors
 ```
 
 ## Ground rules baked in

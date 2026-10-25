@@ -14,6 +14,9 @@ export function MarketingNav() {
           <Link href="/#teach" className="hover:text-[#111]">
             How it works
           </Link>
+          <Link href="/faculty" className="hover:text-[#111]">
+            For instructors
+          </Link>
         </nav>
         <div className="flex items-center gap-2.5">
           <Link href="/login" className="rounded-[10px] bg-[#f0eeea] px-3.5 py-2 text-sm font-medium text-[#1a1a1a] hover:bg-[#e7e4de]">

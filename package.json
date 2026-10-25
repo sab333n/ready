@@ -11,7 +11,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "db:migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
-    "fixtures": "tsx scripts/make-fixtures.ts"
+    "fixtures": "tsx scripts/make-fixtures.ts",
+    "seed:demo": "tsx --env-file-if-exists=.env.local scripts/seed-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
