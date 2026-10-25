@@ -12,12 +12,33 @@ deadline known → readiness measured → plan made → student teaches AI stude
 | 1 | Onboarding + semester map | **Built** |
 | 2 | Teaching classroom (probe, AI students, teach-back, reflection, voice) | **Built** |
 | 3 | Readiness per topic and per exam, "Up next" on the semester page | **Built** (weekly plan not started) |
-| 4 | Text assistant (Twilio) | STOP/START/HELP only |
+| 4 | Nudges by phone notification (free) or text (Twilio), one-tap links, Later/STOP | **Built** |
 | 5 | Instructor dashboard (consent-based sharing) + demo seed | **Built** |
 
 Readiness is derived from evidence, never stored: every probe answer, teaching session and teach-back writes a
 `topic_scores` row, and `src/lib/readiness.ts` weighs them by source and recency (14-day half-life). An exam or quiz
 covers the topics its title names plus what they build on; an exam that names none covers the whole course.
+
+### Nudges: phone notifications (free) and texts
+
+Students turn on notifications on the semester page. On Android and desktop that's one tap; on iPhone (iOS 16.4+)
+Ready must be added to the home screen first, and the page says how. Notifications carry **Teach now** and **Later**
+buttons. Push is free and is used whenever a student has allowed it; otherwise Ready falls back to texts (below).
+Set `NEXT_PUBLIC_VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` (`npx web-push generate-vapid-keys`); without them pushes
+are logged as dry runs.
+
+### Text loop
+
+Once a day (Vercel Cron, `vercel.json`) Ready checks every student who agreed to texts. If it is inside their texting
+hours and an exam or quiz in the next 7 days covers a topic that isn't ready, it texts them a one-tap link that signs
+them in and opens a session on that topic. Rules (`src/lib/sms/nudge.ts`): up to 2 texts a day, never the same test and
+topic twice within 20 hours, LATER snoozes until tomorrow, STOP always opts out. Students can also press "Text me now",
+and instructors "Send a nudge" on the dashboard (ignores the hour window, still capped). Every text in or out is logged
+in `sms_messages`. Without Twilio settings, texts are logged as dry runs and shown on the semester page.
+
+Twilio setup: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` and `CRON_SECRET`, and point the number's
+incoming-message webhook to `https://<your-app>/api/sms/inbound` (HTTP POST). On a Twilio trial, texts only reach
+verified numbers. Vercel Hobby runs cron once a day (22:30 UTC, 5:30pm Central); Pro can run it hourly.
 
 ### Instructor dashboard
 

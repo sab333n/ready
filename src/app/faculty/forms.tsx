@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { buttonClass, inputClass } from "@/components/ui";
-import { createClassAction, facultySignIn, facultySignUp, type FormState } from "./actions";
+import { createClassAction, facultySignIn, facultySignUp, nudgeStudentAction, type FormState, type NudgeState } from "./actions";
 
 export function FacultyAuthForm({ mode }: { mode: "signin" | "signup" }) {
   const [state, action, pending] = useActionState<FormState, FormData>(mode === "signup" ? facultySignUp : facultySignIn, undefined);
@@ -72,6 +72,21 @@ export function CreateClassForm() {
         {pending ? "Creating…" : "Create class"}
       </button>
       {state?.error && <p className="text-sm text-[var(--red)] sm:basis-full">{state.error}</p>}
+    </form>
+  );
+}
+
+export function NudgeButton({ classId, studentId }: { classId: string; studentId: string }) {
+  const [state, action, pending] = useActionState<NudgeState, FormData>(nudgeStudentAction, undefined);
+  return (
+    <form action={action} className="mt-2 flex flex-wrap items-center gap-2">
+      <input type="hidden" name="classId" value={classId} />
+      <input type="hidden" name="studentId" value={studentId} />
+      <button className="rounded-lg border border-black/15 px-2.5 py-1 text-xs font-medium hover:border-black/40 disabled:opacity-50" disabled={pending}>
+        {pending ? "Texting…" : "Send a nudge"}
+      </button>
+      {state?.ok && <span className="text-xs text-[#16a34a]">{state.ok}</span>}
+      {state?.error && <span className="text-xs text-[#dc2626]">{state.error}</span>}
     </form>
   );
 }

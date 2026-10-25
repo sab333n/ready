@@ -8,6 +8,14 @@ import { currentStudent } from "@/lib/auth/session";
 import { startLessonAction } from "@/app/session/actions";
 import { stopSharingAction } from "@/app/join/actions";
 import { studentClasses } from "@/lib/db/classes";
+import { sql } from "@/lib/db";
+import { currentConsent } from "@/lib/db/repo";
+import { formatHour } from "@/lib/onboarding/flow";
+import { formatPhone } from "@/lib/sms/phone";
+import { pushDeviceCount, recentTexts } from "@/lib/sms/service";
+import { env } from "@/lib/env";
+import { settingsConsentText, stopTexts } from "@/app/texts/actions";
+import { PushToggle, TextMeNow, TextSettingsForm } from "@/app/texts/forms";
 import { studentEvidence } from "@/lib/db/lessons";
 import { getGoals, semesterMap, type MapCourse, type MapDeadline, type MapTopic } from "@/lib/db/repo";
 import { deadlineReadiness, deadlineTopics, LEVEL_LABEL, topicReadiness, type DeadlineReadiness, type Level } from "@/lib/readiness";
@@ -28,12 +36,18 @@ async function SemesterMap() {
   const student = await currentStudent();
   if (!student) redirect("/");
   if (!student.onboardingDoneAt) redirect("/onboarding");
-  const [{ courses, deadlines, topics }, goals, evidence, classes] = await Promise.all([
+  const [{ courses, deadlines, topics }, goals, evidence, classes, smsConsent, texts, [prefs], devices] = await Promise.all([
     semesterMap(student.id),
     getGoals(student.id),
     studentEvidence(student.id),
     studentClasses(student.id),
+    currentConsent(student.id, "sms"),
+    recentTexts(student.id, 3),
+    sql<{ textWindowStart: number | null; textWindowEnd: number | null }[]>`select text_window_start, text_window_end from students where id = ${student.id}`,
+    pushDeviceCount(student.id),
   ]);
+  const textsOn = Boolean(student.phoneE164 && smsConsent?.granted);
+  const hours = prefs?.textWindowStart != null && prefs.textWindowEnd != null ? `${formatHour(prefs.textWindowStart)}–${formatHour(prefs.textWindowEnd)}` : "";
   const tz = student.timezone;
   const now = new Date();
   const courseById = new Map(courses.map((c) => [c.id, c]));
@@ -104,6 +118,50 @@ async function SemesterMap() {
       )}
 
       {courses.length > 0 && <AddDeadline courses={courses} />}
+
+      <Card className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Reminders</h2>
+          <p className="text-sm text-muted">
+            When a test is close and a topic isn&apos;t ready, Ready nudges you {hours ? `between ${hours}` : "in the daytime"} with a link straight into a
+            10-minute session. Up to 2 a day.
+          </p>
+        </div>
+        <PushToggle publicKey={env.vapidPublicKey ?? null} />
+        {(devices > 0 || textsOn) && <TextMeNow />}
+        <details className="text-sm" open={textsOn}>
+          <summary className="cursor-pointer text-muted">{textsOn ? `Texts to ${formatPhone(student.phoneE164!)}` : "Or get text messages instead"}</summary>
+          <div className="mt-2">
+            {textsOn ? (
+              <form action={stopTexts}>
+                <button className="text-xs text-muted underline">Turn off texts</button>
+              </form>
+            ) : (
+              <TextSettingsForm consentText={await settingsConsentText()} phone={student.phoneE164 ? formatPhone(student.phoneE164) : ""} window={hours || "5pm–9pm"} />
+            )}
+          </div>
+        </details>
+        {texts.length > 0 && (
+          <ul className="flex flex-col gap-1.5 border-t border-border pt-3 text-sm">
+            {texts.map((t, i) => (
+              <li key={i} className={t.direction === "in" ? "text-right" : ""}>
+                <span className={`inline-block max-w-[85%] rounded-2xl px-3 py-1.5 ${t.direction === "in" ? "bg-accent text-accent-fg" : "bg-background"}`}>{t.body}</span>
+                <span className="block text-xs text-muted">
+                  {t.direction === "in"
+                    ? "You"
+                    : t.status === "dry_run"
+                      ? `Not sent (${t.channel === "push" ? "notifications not configured" : "Twilio not connected"})`
+                      : t.status === "failed"
+                        ? "Failed to send"
+                        : t.channel === "push"
+                          ? "Ready · notification"
+                          : "Ready · text"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
 
       <Card className="flex flex-col gap-3">
         <div>

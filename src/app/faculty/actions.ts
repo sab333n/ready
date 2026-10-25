@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { currentFaculty, endFacultySession, startFacultySession } from "@/lib/auth/faculty";
-import { createClass, createFaculty, facultyAuthByEmail } from "@/lib/db/classes";
+import { createClass, createFaculty, facultyAuthByEmail, sharesWith } from "@/lib/db/classes";
+import { nudgeStudent } from "@/lib/sms/service";
+import { revalidatePath } from "next/cache";
 import { findCourseCode } from "@/lib/courses";
 
 export type FormState = { error?: string } | undefined;
@@ -49,4 +51,19 @@ export async function createClassAction(_: FormState, form: FormData): Promise<F
   if (!course) return { error: "Enter the course code students see in Canvas, e.g. PHARM 201." };
   const created = await createClass(faculty.id, name, course.displayCode);
   redirect(`/faculty/class/${created.id}`);
+}
+
+export type NudgeState = { ok?: string; error?: string } | undefined;
+
+/** "Send a nudge" on the dashboard. Only for students sharing with this class who agreed to texts. */
+export async function nudgeStudentAction(_: NudgeState, form: FormData): Promise<NudgeState> {
+  const faculty = await currentFaculty();
+  if (!faculty) return { error: "Please sign in again." };
+  const classId = String(form.get("classId"));
+  const studentId = String(form.get("studentId"));
+  if (!(await sharesWith(faculty.id, classId, studentId))) return { error: "This student isn't sharing with this class anymore." };
+  const out = await nudgeStudent(studentId, { kind: "instructor", from: faculty.displayName });
+  revalidatePath(`/faculty/class/${classId}`);
+  if (!out.sent) return { error: out.error ? `Twilio: ${out.error}` : out.reason };
+  return { ok: out.status === "dry_run" ? "Logged (Twilio not connected yet)." : "Texted." };
 }

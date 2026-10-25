@@ -5,6 +5,7 @@ import { currentFaculty } from "@/lib/auth/faculty";
 import { classLabel, classMembers, facultyClass } from "@/lib/db/classes";
 import { classReport, type ClassReport, type ClassTopic, type MemberRow } from "@/lib/classes/report";
 import { LEVEL_LABEL, LEVEL_ORDER, type Level } from "@/lib/readiness";
+import { NudgeButton } from "../../forms";
 
 export default function ClassDashboard(props: PageProps<"/faculty/class/[id]">) {
   return (
@@ -62,7 +63,7 @@ async function Dashboard({ params }: { params: PageProps<"/faculty/class/[id]">[
             <NextTest report={report} now={now} total={members.length} />
             <Misconceptions topics={report.topics} />
           </div>
-          <AtRiskList report={report} />
+          <AtRiskList report={report} classId={cls.id} now={now} />
           <Heatmap report={report} now={now} />
           <p className="text-xs text-[#5a5a5a]">
             Readiness comes from what students explained to Ready&apos;s AI students, their probe answers and teach-backs, weighted toward the last two weeks. Students
@@ -145,7 +146,7 @@ function Misconceptions({ topics }: { topics: ClassTopic[] }) {
   );
 }
 
-function AtRiskList({ report }: { report: ClassReport }) {
+function AtRiskList({ report, classId, now }: { report: ClassReport; classId: string; now: Date }) {
   return (
     <section className="rounded-2xl border border-black/8 p-5">
       <div className="flex items-baseline justify-between gap-3">
@@ -162,7 +163,14 @@ function AtRiskList({ report }: { report: ClassReport }) {
                   <li key={reason}>{reason}</li>
                 ))}
               </ul>
-              {r.teachNext && <p className="mt-1.5 text-xs text-[#5a5a5a]">Their semester page suggests teaching {r.teachNext} next.</p>}
+              {r.teachNext && (
+                <p className="mt-1.5 text-xs text-[#5a5a5a]">
+                  {r.lastTexted && now.getTime() - r.lastTexted.getTime() < 3 * 864e5
+                    ? `Ready nudged them ${hoursAgo(r.lastTexted, now)} to teach ${r.teachNext}.`
+                    : `Next step for them: teach ${r.teachNext}.`}
+                </p>
+              )}
+              {r.textsOn ? <NudgeButton classId={classId} studentId={r.studentId} /> : <p className="mt-1 text-xs text-[#a3a3a3]">Hasn&apos;t turned on reminders</p>}
             </li>
           ))}
         </ul>
@@ -256,4 +264,11 @@ function ago(when: Date, now: Date) {
   if (days <= 0) return "today";
   if (days === 1) return "yesterday";
   return `${days} days ago`;
+}
+
+function hoursAgo(when: Date, now: Date) {
+  const hours = Math.floor((now.getTime() - when.getTime()) / 3600_000);
+  if (hours < 1) return "just now";
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
 }

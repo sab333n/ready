@@ -24,7 +24,20 @@ export const env = {
   geminiApiKey: process.env.GEMINI_API_KEY,
   voiceModel: process.env.VOICE_MODEL ?? "gemini-2.5-flash-native-audio-latest",
   twilioAuthToken: process.env.TWILIO_AUTH_TOKEN,
+  twilioAccountSid: process.env.TWILIO_ACCOUNT_SID,
+  // The Twilio number texts come from (E.164), or a Messaging Service SID (MG...).
+  twilioFrom: process.env.TWILIO_FROM,
+  // Web push (free nudges). Generate a pair with `npx web-push generate-vapid-keys`.
+  vapidPublicKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+  vapidPrivateKey: process.env.VAPID_PRIVATE_KEY,
+  // Vercel Cron sends "Authorization: Bearer <CRON_SECRET>".
+  cronSecret: process.env.CRON_SECRET,
   isProd: process.env.NODE_ENV === "production",
 };
+
+/** Texts really go out only with all three Twilio settings; otherwise they are logged as dry runs. */
+export const smsSendingEnabled = () => Boolean(env.twilioAccountSid && env.twilioAuthToken && env.twilioFrom);
+
+export const pushEnabled = () => Boolean(env.vapidPublicKey && env.vapidPrivateKey);
 
 export const supabaseAuthEnabled = () => Boolean(env.supabaseUrl && env.supabaseAnonKey);

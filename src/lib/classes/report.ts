@@ -14,6 +14,9 @@ export type MemberData = {
   topics: MemberTopic[];
   deadlines: MemberDeadline[];
   evidence: Evidence[];
+  /** Agreed to texts, and when Ready last nudged them. */
+  textsOn?: boolean;
+  lastTexted?: Date | null;
 };
 
 export type ClassTopic = {
@@ -36,7 +39,15 @@ export type MemberRow = {
   exam: DeadlineReadiness | null;
 };
 
-export type AtRisk = { studentId: string; name: string; severity: number; reasons: string[]; teachNext: string | null };
+export type AtRisk = {
+  studentId: string;
+  name: string;
+  severity: number;
+  reasons: string[];
+  teachNext: string | null;
+  textsOn: boolean;
+  lastTexted: Date | null;
+};
 
 export type ClassExam = { title: string; kind: "exam" | "quiz"; dueAt: Date; counts: Record<Level, number> };
 
@@ -161,7 +172,7 @@ function riskFor(m: MemberData, row: MemberRow, exam: ClassExam | null, now: Dat
   }
   if (severity === 0) return null;
   const next = row.exam?.next ?? worstCell(row.cells);
-  return { studentId: m.studentId, name: m.name, severity, reasons, teachNext: topicName(next) };
+  return { studentId: m.studentId, name: m.name, severity, reasons, teachNext: topicName(next), textsOn: m.textsOn ?? false, lastTexted: m.lastTexted ?? null };
 }
 
 function worstCell(cells: Record<string, TopicReadiness>): TopicReadiness | null {

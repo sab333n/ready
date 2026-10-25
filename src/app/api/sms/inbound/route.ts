@@ -3,10 +3,13 @@ import { env } from "@/lib/env";
 import { setSmsConsentByPhone } from "@/lib/db/repo";
 import { normalizePhone } from "@/lib/sms/phone";
 import { complianceKeyword, SMS_REPLIES } from "@/lib/sms/keywords";
+import { createLoginLink } from "@/lib/auth/links";
+import { inboundIntent, SNOOZE_REPLY, UNKNOWN_REPLY, YES_REPLY } from "@/lib/sms/nudge";
+import { lastNudgedTopic, logSms, studentByPhone } from "@/lib/sms/service";
 import { isValidTwilioRequest } from "@/lib/sms/twilio-signature";
 
-// Twilio inbound SMS webhook. Phase 1 handles only STOP / START / HELP, which
-// must always work. Other replies (YES, "quiz me", ...) arrive in Phase 4.
+// Twilio inbound SMS webhook. STOP / START / HELP always work first; then YES
+// (send a session link) and LATER (snooze until tomorrow).
 export async function POST(request: NextRequest) {
   const form = await request.formData();
   const params = Object.fromEntries([...form].map(([k, v]) => [k, String(v)]));
@@ -32,6 +35,21 @@ export async function POST(request: NextRequest) {
     reply = SMS_REPLIES.start;
   } else if (keyword === "help") {
     reply = SMS_REPLIES.help;
+  }
+
+  const student = from ? await studentByPhone(from) : null;
+  if (student && !keyword) {
+    const intent = inboundIntent(params.Body ?? "");
+    await logSms(student.id, { direction: "in", kind: intent === "later" ? "snooze" : "other", body: String(params.Body ?? "").slice(0, 1000), status: "received" });
+    if (intent === "yes") {
+      const topic = await lastNudgedTopic(student.id);
+      reply = YES_REPLY(await createLoginLink(student.id, topic?.topicId ?? null), topic?.name ?? null);
+    } else if (intent === "later") {
+      reply = SNOOZE_REPLY;
+    } else {
+      reply = UNKNOWN_REPLY;
+    }
+    await logSms(student.id, { direction: "out", kind: "reply", body: reply, status: "sent" });
   }
 
   return new Response(twiml(reply), { headers: { "content-type": "text/xml" } });

@@ -143,22 +143,38 @@ export async function classMembers(classId: string): Promise<{ members: MemberDa
       select ts.student_id, ts.topic_id, ts.source, ts.score, ts.confident_wrong, ts.created_at
       from topic_scores ts join topics t on t.id = ts.topic_id join courses c on c.id = t.course_id
       where ts.student_id = any(${ids}::uuid[]) and c.code = ${cls.courseCode} and ts.created_at > now() - interval '120 days'`,
-    sql<{ studentId: string; lastActive: Date | null }[]>`
+    sql<{ studentId: string; lastActive: Date | null; textsOn: boolean; lastTexted: Date | null }[]>`
       select s.id as student_id, greatest(
         (select max(started_at) from sessions where student_id = s.id),
-        (select max(created_at) from topic_scores where student_id = s.id)) as last_active
+        (select max(created_at) from topic_scores where student_id = s.id)) as last_active,
+        exists (select 1 from push_subscriptions p where p.student_id = s.id)
+          or (s.phone_e164 is not null and coalesce((select granted from consents c where c.student_id = s.id and c.kind = 'sms'
+          order by c.created_at desc limit 1), false)) as texts_on,
+        (select max(created_at) from sms_messages m where m.student_id = s.id and m.direction = 'out'
+          and m.kind in ('nudge', 'instructor') and m.status <> 'failed') as last_texted
       from students s where s.id = any(${ids}::uuid[])`,
   ]);
-  const last = new Map(activity.map((a) => [a.studentId, a.lastActive]));
+  const last = new Map(activity.map((a) => [a.studentId, a]));
   const members: MemberData[] = roster
     .filter((r) => r.sharing)
     .map((r) => ({
       studentId: r.studentId,
       name: r.displayName?.trim() || r.email.split("@")[0],
-      lastActive: last.get(r.studentId) ?? null,
+      lastActive: last.get(r.studentId)?.lastActive ?? null,
+      textsOn: last.get(r.studentId)?.textsOn ?? false,
+      lastTexted: last.get(r.studentId)?.lastTexted ?? null,
       topics: topics.filter((t) => t.studentId === r.studentId),
       deadlines: deadlines.filter((d) => d.studentId === r.studentId),
       evidence: evidence.filter((e) => e.studentId === r.studentId),
     }));
   return { members, notSharing: roster.length - ids.length };
+}
+
+/** True when this student currently shares with this instructor's class. */
+export async function sharesWith(facultyId: string, classId: string, studentId: string) {
+  const [row] = await sql<{ ok: boolean }[]>`
+    select ${sharingNow(sql`cm.student_id`, sql`cm.class_id`)} as ok
+    from class_members cm join classes c on c.id = cm.class_id
+    where cm.class_id = ${classId} and cm.student_id = ${studentId} and c.faculty_id = ${facultyId}`;
+  return row?.ok === true;
 }

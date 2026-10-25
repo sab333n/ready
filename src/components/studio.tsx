@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentStudent } from "@/lib/auth/session";
 import { recentSessions } from "@/lib/db/lessons";
+import { TimezoneSync } from "@/app/texts/forms";
 import { Sidebar, type StudioSession } from "./sidebar";
 
 export async function Studio({ children, mode = "all" }: { children: React.ReactNode; mode?: "teach" | "practice" | "all" }) {
@@ -16,6 +17,7 @@ export async function Studio({ children, mode = "all" }: { children: React.React
   }));
   return (
     <div className="flex min-h-dvh bg-background text-foreground">
+      <TimezoneSync current={student.timezone} />
       <Sidebar key={mode} sessions={sessions} mode={mode} />
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center gap-4 border-b border-border px-4 py-2 text-sm md:hidden">
