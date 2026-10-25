@@ -7,18 +7,19 @@ import { env } from "@/lib/env";
 const TTL_MS = 48 * 3600_000;
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 
-export async function createLoginLink(studentId: string, topicId: string | null, now = new Date()): Promise<string> {
+/** `redirectTo` (an app path) opens a page instead of starting a session on `topicId`. */
+export async function createLoginLink(studentId: string, topicId: string | null, now = new Date(), redirectTo: string | null = null): Promise<string> {
   const token = randomBytes(16).toString("base64url");
   await sql`
-    insert into login_links (token_hash, student_id, topic_id, expires_at)
-    values (${hash(token)}, ${studentId}, ${topicId}, ${new Date(now.getTime() + TTL_MS)})`;
+    insert into login_links (token_hash, student_id, topic_id, expires_at, redirect_to)
+    values (${hash(token)}, ${studentId}, ${topicId}, ${new Date(now.getTime() + TTL_MS)}, ${redirectTo})`;
   return `${env.appUrl}/t/${token}`;
 }
 
 export async function redeemLoginLink(token: string, now = new Date()) {
-  const [row] = await sql<{ studentId: string; topicId: string | null }[]>`
+  const [row] = await sql<{ studentId: string; topicId: string | null; redirectTo: string | null }[]>`
     update login_links set last_used_at = ${now}
     where token_hash = ${hash(token)} and expires_at > ${now}
-    returning student_id, topic_id`;
+    returning student_id, topic_id, redirect_to`;
   return row ?? null;
 }

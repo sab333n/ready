@@ -52,7 +52,7 @@ describe("the text loop", () => {
     expect(msg.body).toMatch(/Quiz 4: Antihypertensives is .*You haven't taught Antihypertensives yet\./);
 
     const token = msg.body.match(/\/t\/([\w-]+)/)![1];
-    expect(await redeemLoginLink(token)).toEqual({ studentId, topicId: antihypertensives });
+    expect(await redeemLoginLink(token)).toEqual({ studentId, topicId: antihypertensives, redirectTo: null });
     expect(await redeemLoginLink("not-a-token")).toBeNull();
 
     expect(await runNudges()).toMatchObject({ sent: 0 });

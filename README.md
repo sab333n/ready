@@ -40,6 +40,17 @@ Twilio setup: set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` and `
 incoming-message webhook to `https://<your-app>/api/sms/inbound` (HTTP POST). On a Twilio trial, texts only reach
 verified numbers. Vercel Hobby runs cron once a day (22:30 UTC, 5:30pm Central); Pro can run it hourly.
 
+### Lesson videos
+
+On the dashboard, an instructor picks a topic (Ready suggests the one the class is most confidently wrong about), adds an
+optional focus, and clicks **Make a video**. Gemini writes a 4–6 scene script (`prompts/lesson-video.v1.md`) from the
+topic, course and misconception counts, never from students' notes. Gemini text-to-speech (`TTS_MODEL`, `TTS_VOICE`)
+records one clip per scene. The browser plays it as narrated slides with captions; a scene without a clip uses the
+device's voice. The instructor previews the draft and shares it; students who aren't ready on that topic get a
+notification, and everyone in the class sees it on their semester page. The video ends with **Teach it back**, which
+opens a session on the topic. Watching never changes readiness; the dashboard shows who watched, finished, and taught
+it back since.
+
 ### Instructor dashboard
 
 Instructors sign up at `/faculty`, create a class with its Canvas course code, and get a join code (e.g. `PHARM-7KQ2`).

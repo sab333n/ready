@@ -7,7 +7,7 @@ import { sendPush } from "@/lib/push/send";
 import { studentEvidence } from "@/lib/db/lessons";
 import { currentConsent, semesterMap } from "@/lib/db/repo";
 import { deadlineReadiness, deadlineTopics, topicReadiness } from "@/lib/readiness";
-import { NOTHING_DUE_REPLY, nudgePush, nudgeText, planNudge, type Channel, type NudgeCandidate, type NudgeContext, type NudgePlan } from "./nudge";
+import { DAILY_CAP, NOTHING_DUE_REPLY, nudgePush, nudgeText, planNudge, sentToday, type Channel, type NudgeCandidate, type NudgeContext, type NudgePlan } from "./nudge";
 import { sendSms } from "./send";
 
 type Kind = "nudge" | "instructor" | "test" | "reply" | "snooze" | "other";
@@ -192,4 +192,22 @@ export async function removePushSubscriptions(studentId: string, endpoint?: stri
 export async function pushDeviceCount(studentId: string) {
   const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from push_subscriptions where student_id = ${studentId}`;
   return count;
+}
+
+/**
+ * A one-off message from an instructor (e.g. "I made you a video"), with a link
+ * that opens `path`. Same channel and daily cap as nudges.
+ */
+export async function notifyStudent(studentId: string, msg: { title: string; body: string; path: string }, now = new Date()): Promise<NudgeOutcome> {
+  const s = await studentRow(studentId);
+  if (!s) return { sent: false, reason: "No such student" };
+  const ctx = await nudgeContext(s, now);
+  if (!ctx.channel) return { sent: false, reason: "Hasn't turned on reminders" };
+  if (sentToday(ctx) >= DAILY_CAP) return { sent: false, reason: `Already nudged ${DAILY_CAP} times today` };
+  const link = await createLoginLink(s.id, null, now, msg.path);
+  const r =
+    ctx.channel === "push"
+      ? await pushStudent(s.id, { title: msg.title, body: msg.body, url: link }, { kind: "instructor" })
+      : await textStudent(s.id, s.phoneE164!, `${msg.title}. ${msg.body} ${link} Reply STOP to opt out.`, { kind: "instructor" });
+  return { sent: r.status !== "failed", status: r.status, error: r.error, channel: ctx.channel };
 }

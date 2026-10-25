@@ -34,9 +34,7 @@ export function planNudge(ctx: NudgeContext, opts: { ignoreWindow?: boolean; ign
   if (!ctx.channel) return { send: false, reason: "Hasn't turned on reminders" };
   if (!opts.ignoreWindow && !inWindow(ctx.now, ctx.timezone, ctx.window)) return { send: false, reason: "Outside their texting hours" };
   if (!opts.ignoreSnooze && ctx.snoozedUntil && ctx.snoozedUntil > ctx.now) return { send: false, reason: "Snoozed" };
-  const today = localDay(ctx.now, ctx.timezone);
-  const sentToday = ctx.recent.filter((m) => localDay(m.at, ctx.timezone) === today).length;
-  if (sentToday >= DAILY_CAP) return { send: false, reason: `Already texted ${DAILY_CAP} times today` };
+  if (sentToday(ctx) >= DAILY_CAP) return { send: false, reason: `Already texted ${DAILY_CAP} times today` };
 
   const repeatCutoff = ctx.now.getTime() - REPEAT_HOURS * 3600_000;
   const worth = ctx.candidates
@@ -46,6 +44,12 @@ export function planNudge(ctx: NudgeContext, opts: { ignoreWindow?: boolean; ign
   const due = worth.filter((c) => !ctx.recent.some((m) => m.deadlineId === c.deadline.id && m.topicId === c.topicId && m.at.getTime() > repeatCutoff));
   if (due[0]) return { send: true, candidate: due[0] };
   return { send: false, reason: worth[0] ? `Already texted about ${worth[0].topicName ?? "this"} today` : "Ready for everything this week" };
+}
+
+/** Nudges already sent today, in the student's own day. */
+export function sentToday(ctx: Pick<NudgeContext, "now" | "timezone" | "recent">) {
+  const today = localDay(ctx.now, ctx.timezone);
+  return ctx.recent.filter((m) => localDay(m.at, ctx.timezone) === today).length;
 }
 
 /** Not ready or unmeasured is worth a text all week; "getting there" only in the last two days. */

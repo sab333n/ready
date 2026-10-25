@@ -8,6 +8,7 @@ import { currentStudent } from "@/lib/auth/session";
 import { startLessonAction } from "@/app/session/actions";
 import { stopSharingAction } from "@/app/join/actions";
 import { studentClasses } from "@/lib/db/classes";
+import { studentVideos } from "@/lib/db/videos";
 import { sql } from "@/lib/db";
 import { currentConsent } from "@/lib/db/repo";
 import { formatHour } from "@/lib/onboarding/flow";
@@ -36,7 +37,7 @@ async function SemesterMap() {
   const student = await currentStudent();
   if (!student) redirect("/");
   if (!student.onboardingDoneAt) redirect("/onboarding");
-  const [{ courses, deadlines, topics }, goals, evidence, classes, smsConsent, texts, [prefs], devices] = await Promise.all([
+  const [{ courses, deadlines, topics }, goals, evidence, classes, smsConsent, texts, [prefs], devices, videos] = await Promise.all([
     semesterMap(student.id),
     getGoals(student.id),
     studentEvidence(student.id),
@@ -45,6 +46,7 @@ async function SemesterMap() {
     recentTexts(student.id, 3),
     sql<{ textWindowStart: number | null; textWindowEnd: number | null }[]>`select text_window_start, text_window_end from students where id = ${student.id}`,
     pushDeviceCount(student.id),
+    studentVideos(student.id),
   ]);
   const textsOn = Boolean(student.phoneE164 && smsConsent?.granted);
   const hours = prefs?.textWindowStart != null && prefs.textWindowEnd != null ? `${formatHour(prefs.textWindowStart)}–${formatHour(prefs.textWindowEnd)}` : "";
@@ -93,6 +95,27 @@ async function SemesterMap() {
           now={now}
           rolePlayer={rolePlayer}
         />
+      )}
+
+      {videos.length > 0 && (
+        <Card className="flex flex-col gap-2">
+          <h2 className="text-lg font-semibold">Videos from your instructors</h2>
+          <ul className="flex flex-col gap-1.5">
+            {videos.map((v) => (
+              <li key={v.id}>
+                <Link href={`/video/${v.id}`} className="flex items-center justify-between gap-3 rounded-xl border border-border px-3 py-2 text-sm hover:border-foreground/30">
+                  <span>
+                    <span className="font-medium">{v.title}</span>
+                    <span className="block text-xs text-muted">
+                      {v.instructor} · {v.displayCode} · {v.topicName}
+                    </span>
+                  </span>
+                  <span className={`shrink-0 text-xs ${v.watched ? "text-muted" : "text-[var(--gold)]"}`}>{v.watched ? "Watched" : "▶ Watch"}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       {deadlines.length === 0 ? (

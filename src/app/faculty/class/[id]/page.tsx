@@ -5,7 +5,11 @@ import { currentFaculty } from "@/lib/auth/faculty";
 import { classLabel, classMembers, facultyClass } from "@/lib/db/classes";
 import { classReport, type ClassReport, type ClassTopic, type MemberRow } from "@/lib/classes/report";
 import { LEVEL_LABEL, LEVEL_ORDER, type Level } from "@/lib/readiness";
-import { NudgeButton } from "../../forms";
+import { MakeVideoForm, NudgeButton } from "../../forms";
+import { classVideos, type VideoStats } from "@/lib/db/videos";
+
+// Making a video records narration for every scene, which takes a while.
+export const maxDuration = 120;
 
 export default function ClassDashboard(props: PageProps<"/faculty/class/[id]">) {
   return (
@@ -25,7 +29,7 @@ async function Dashboard({ params }: { params: PageProps<"/faculty/class/[id]">[
   const { id } = await params;
   const cls = await facultyClass(faculty.id, id).catch(() => null);
   if (!cls) notFound();
-  const { members, notSharing } = await classMembers(cls.id);
+  const [{ members, notSharing }, videos] = await Promise.all([classMembers(cls.id), classVideos(cls.id)]);
   const now = new Date();
   const report = classReport(members, now);
 
@@ -64,6 +68,7 @@ async function Dashboard({ params }: { params: PageProps<"/faculty/class/[id]">[
             <Misconceptions topics={report.topics} />
           </div>
           <AtRiskList report={report} classId={cls.id} now={now} />
+          <Videos classId={cls.id} report={report} videos={videos} />
           <Heatmap report={report} now={now} />
           <p className="text-xs text-[#5a5a5a]">
             Readiness comes from what students explained to Ready&apos;s AI students, their probe answers and teach-backs, weighted toward the last two weeks. Students
@@ -271,4 +276,46 @@ function hoursAgo(when: Date, now: Date) {
   if (hours < 1) return "just now";
   if (hours < 24) return `${hours}h ago`;
   return `${Math.floor(hours / 24)}d ago`;
+}
+
+function Videos({ classId, report, videos }: { classId: string; report: ClassReport; videos: VideoStats[] }) {
+  // Suggest the topic the class is most confidently wrong about, then the weakest.
+  const suggested =
+    [...report.topics].sort((a, b) => b.confidentWrong - a.confidentWrong || (a.average ?? 101) - (b.average ?? 101)).find((t) => t.measured > 0)?.name ?? null;
+  return (
+    <section className="rounded-2xl border border-black/8 p-5">
+      <h2 className="text-lg font-semibold">Lesson videos</h2>
+      <p className="mb-4 text-sm text-[#5a5a5a]">
+        A 1–2 minute narrated lesson on a topic students don&apos;t get yet. You preview it before anyone sees it. Watching doesn&apos;t count as ready; students
+        teach it back afterwards, and that&apos;s what moves readiness.
+      </p>
+      <MakeVideoForm classId={classId} topics={report.topics.map((t) => t.name)} suggested={suggested} />
+      {videos.length > 0 && (
+        <ul className="mt-5 flex flex-col divide-y divide-black/6 border-t border-black/6">
+          {videos.map((v) => (
+            <li key={v.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div>
+                <Link href={`/faculty/class/${classId}/video/${v.id}`} className="font-medium hover:underline">
+                  {v.title}
+                </Link>
+                <p className="text-sm text-[#5a5a5a]">
+                  {v.topicName} ·{" "}
+                  {v.status === "draft" ? (
+                    <span className="text-[#d97706]">Draft, not shared yet</span>
+                  ) : (
+                    <>
+                      {v.watched} watched · {v.finished} finished · <span className="text-[#16a34a]">{v.taughtBack} taught it back since</span>
+                    </>
+                  )}
+                </p>
+              </div>
+              <Link href={`/faculty/class/${classId}/video/${v.id}`} className="rounded-lg border border-black/15 px-3 py-1.5 text-sm hover:border-black/40">
+                {v.status === "draft" ? "Preview and share" : "Open"}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
 }
