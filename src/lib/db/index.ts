@@ -7,7 +7,10 @@ const globalForDb = globalThis as unknown as { sql?: postgres.Sql };
 export const sql =
   globalForDb.sql ??
   postgres(env.databaseUrl, {
-    max: 5,
+    max: env.isProd ? 1 : 5,
+    // Neon's pooled connection (PgBouncer) rejects prepared statements.
+    prepare: !env.isProd,
+    idle_timeout: env.isProd ? 20 : 0,
     onnotice: () => {},
     transform: postgres.camel,
   });
