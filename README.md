@@ -28,11 +28,11 @@ npm run fixtures               # fake demo calendar + syllabus
 npm run dev
 ```
 
-Open http://localhost:3000, sign in with any email (dev mode), finish the chat, then on the next page paste
+Open http://localhost:3000, continue with Google or create an account, finish the chat, then on the next page paste
 `http://localhost:3000/demo/demo-canvas.ics` and upload `fixtures/pharm-201-syllabus.pdf`.
 
-- **Sign-in:** with `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` set, sign-in sends a Supabase magic link. Without them, dev sign-in trusts the typed email (disabled in production).
-- **AI reading:** `LLM_PROVIDER=anthropic` plus `ANTHROPIC_API_KEY` uses Claude to read syllabi and screenshots. `none` (the default) uses an offline parser for PDFs; screenshots need the AI reader.
+- **Sign-in:** the front page leads to Google (Supabase Auth, same provider setup as Interlink) or an email and password stored in this app's database. Google needs `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Add `http://localhost:3000/auth/callback` to the Supabase redirect allow list.
+- **AI reading:** `LLM_PROVIDER=gemini` plus `GEMINI_API_KEY` uses Gemini to read syllabi and screenshots, and to run questions, grading, and the classroom. `none` uses an offline parser for PDFs; screenshots need the AI reader. `anthropic` is the Claude alternative.
 
 ## Tests
 

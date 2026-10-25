@@ -7,6 +7,7 @@ import {
   deleteStudent,
   semesterMap,
   setSmsConsentByPhone,
+  ensureNamedTopic,
   upsertStudentByEmail,
   type Student,
 } from "@/lib/db/repo";
@@ -62,6 +63,16 @@ describe("syllabus upload", () => {
     expect(map.courses).toHaveLength(3);
     expect(map.deadlines.find((d) => /mini-project/.test(d.title))?.source).toBe("upload");
     expect(map.materialCount).toBe(1);
+  });
+
+  it("keeps two different PDFs as two materials (regression: hashes were taken after the PDF reader emptied the buffer)", async () => {
+    const file = await pdfFile();
+    const original = file.bytes.byteLength;
+    await importMaterial(student, file, NOW);
+    expect(file.bytes.byteLength).toBe(original);
+    await importMaterial(student, { filename: "other.pdf", mime: "application/pdf", bytes: await syllabusPdf(["PHARM 201", "Week 1: Something Else"]) }, NOW);
+    const [{ count }] = await sql<{ count: number }[]>`select count(*)::int as count from materials`;
+    expect(count).toBe(2);
   });
 
   it("uses the LLM provider when configured and stores prerequisites", async () => {
@@ -135,5 +146,17 @@ describe("acceptance: sign-up to semester map", () => {
     expect(map.deadlines.length).toBeGreaterThanOrEqual(14);
     expect(map.topics.length).toBe(10);
     expect(performance.now() - started).toBeLessThan(10_000);
+  });
+});
+
+describe("topics named by the learner", () => {
+  it("adds calculus beside the syllabus topics and keeps the same row on a second request", async () => {
+    const first = await ensureNamedTopic(student.id, "calculus");
+    const again = await ensureNamedTopic(student.id, "Calculus");
+    expect(first.name).toBe("Calculus");
+    expect(again.id).toBe(first.id);
+    const map = await semesterMap(student.id);
+    expect(map.topics.map((t) => t.name)).toContain("Calculus");
+    expect(map.courses.some((c) => c.displayCode === "Chosen")).toBe(true);
   });
 });

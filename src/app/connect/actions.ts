@@ -1,7 +1,8 @@
 "use server";
 
 import { currentStudent } from "@/lib/auth/session";
-import { importCalendarText, importCalendarUrl, importMaterial, type UploadResult } from "@/lib/importers";
+import { canvasLink } from "@/lib/db/repo";
+import { importCalendarText, importCalendarUrl, importCanvas, importMaterial, type UploadResult } from "@/lib/importers";
 import { ACCEPTED_TYPES, MAX_UPLOAD_BYTES } from "@/lib/materials/extract";
 
 export type CalendarState = { ok?: string; error?: string } | undefined;
@@ -32,6 +33,29 @@ export async function connectCalendar(_: CalendarState, form: FormData): Promise
   }
 }
 
+export async function connectCanvas(_: CalendarState, form: FormData): Promise<CalendarState> {
+  const student = await currentStudent();
+  if (!student) return { error: "Please sign in again." };
+  const saved = await canvasLink(student.id);
+  const base = String(form.get("base") ?? "").trim() || saved?.baseUrl || "";
+  const token = String(form.get("token") ?? "").trim() || saved?.token || "";
+  if (!base) return { error: "Enter your school's Canvas address." };
+  if (!token) return { error: "Paste an access token from Canvas → Account → Settings." };
+  try {
+    const result = await importCanvas(student, base, token);
+    const deadlines = result.added + result.updated;
+    const files = result.files;
+    if (deadlines === 0 && files === 0) return { ok: "Connected. Nothing new to import. If a syllabus is only a scan, upload it below." };
+    const parts = [
+      deadlines ? `${deadlines} deadline${deadlines === 1 ? "" : "s"}` : "",
+      files ? `${files} course file${files === 1 ? "" : "s"}` : "",
+    ].filter(Boolean);
+    return { ok: `Connected. Imported ${parts.join(" and ")} from ${result.courses} course${result.courses === 1 ? "" : "s"}.` };
+  } catch (err) {
+    return { error: message(err) };
+  }
+}
+
 export async function uploadMaterials(_: UploadState, form: FormData): Promise<UploadState> {
   const student = await currentStudent();
   if (!student) return { errors: ["Please sign in again."] };
@@ -41,12 +65,13 @@ export async function uploadMaterials(_: UploadState, form: FormData): Promise<U
   const results: UploadResult[] = [];
   const errors: string[] = [];
   for (const file of files.slice(0, 10)) {
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      errors.push(`${file.name}: upload a PDF or an image (PNG, JPG).`);
+    const mime = file.type || (file.name.toLowerCase().endsWith(".pptx") ? "application/vnd.openxmlformats-officedocument.presentationml.presentation" : file.name.toLowerCase().endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "");
+    if (!ACCEPTED_TYPES.includes(mime)) {
+      errors.push(`${file.name}: upload a PDF, PowerPoint, Word file, or an image (PNG, JPG).`);
       continue;
     }
     try {
-      results.push(await importMaterial(student, { filename: file.name, mime: file.type, bytes: new Uint8Array(await file.arrayBuffer()) }));
+      results.push(await importMaterial(student, { filename: file.name, mime, bytes: new Uint8Array(await file.arrayBuffer()) }));
     } catch (err) {
       errors.push(`${file.name}: ${message(err)}`);
     }

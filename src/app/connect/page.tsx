@@ -3,8 +3,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buttonClass, Card, Shell } from "@/components/ui";
 import { currentStudent } from "@/lib/auth/session";
-import { semesterMap } from "@/lib/db/repo";
-import { CalendarForm, UploadForm } from "./forms";
+import { canvasLink, semesterMap } from "@/lib/db/repo";
+import { CalendarForm, CanvasForm, UploadForm } from "./forms";
 
 export default function ConnectPage() {
   return (
@@ -12,10 +12,19 @@ export default function ConnectPage() {
       <div className="flex flex-col gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Let&apos;s map your semester</h1>
-          <p className="text-muted">Connect your course calendar, then add a syllabus. Either one is enough to start.</p>
+          <p className="text-muted">Connect Canvas to pull due dates, the syllabus, and posted readings. A calendar feed or a PDF still works on its own.</p>
         </div>
         <Card>
-          <h2 className="font-medium">1. Course calendar</h2>
+          <h2 className="font-medium">1. Canvas</h2>
+          <p className="mb-3 text-sm text-muted">
+            On the Canvas website, open Account, then Settings, and scroll to Approved Integrations. Add New Access Token is there only if your school allows it. Paste your school address and that token. Ready then reads due dates, the syllabus page, and posted PDFs, PowerPoint, and Word files. If the button is missing or greyed out, the school has blocked student tokens. Use the calendar feed and the upload box below. Ready never asks for your Canvas password.
+          </p>
+          <Suspense fallback={null}>
+            <CanvasSlot />
+          </Suspense>
+        </Card>
+        <Card>
+          <h2 className="font-medium">2. Course calendar</h2>
           <p className="mb-3 text-sm text-muted">
             Canvas: Calendar → Calendar Feed. Moodle: Calendar → Export calendar → Get calendar URL. Blackboard: Calendar →
             Share calendar. Copy the link and paste it here.
@@ -23,9 +32,9 @@ export default function ConnectPage() {
           <CalendarForm />
         </Card>
         <Card>
-          <h2 className="font-medium">2. Syllabus, slides or screenshots</h2>
+          <h2 className="font-medium">3. Syllabus, slides or screenshots</h2>
           <p className="mb-3 text-sm text-muted">
-            PDFs or screenshots (like a Pearson assignment list). We pull out deadlines and topics. We never ask for your
+            PDFs, PowerPoint, Word files, or screenshots (like a Pearson assignment list). We pull out deadlines and topics. We never ask for your
             homework-site logins.
           </p>
           <UploadForm />
@@ -36,6 +45,13 @@ export default function ConnectPage() {
       </div>
     </Shell>
   );
+}
+
+async function CanvasSlot() {
+  const student = await currentStudent();
+  if (!student) return null;
+  const link = await canvasLink(student.id);
+  return <CanvasForm connected={link?.baseUrl ?? null} />;
 }
 
 async function Progress() {

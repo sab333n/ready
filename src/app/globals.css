@@ -1,28 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f7f5;
-  --foreground: #1c1c1a;
-  --card: #ffffff;
-  --muted: #6b6b66;
-  --border: #e4e4df;
-  --accent: #2f5bea;
-  --accent-fg: #ffffff;
-  --red: #d64545;
-  --yellow: #c98a0a;
-  --green: #1f9d55;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #121211;
-    --foreground: #ededea;
-    --card: #1c1c1a;
-    --muted: #9a9a94;
-    --border: #2e2e2b;
-    --accent: #6b8cff;
-    --accent-fg: #0b0b0a;
-  }
+  --background: #141413;
+  --foreground: #eceae4;
+  --card: #1e1e1c;
+  --muted: #9b998f;
+  --border: #2e2e2a;
+  --accent: #eceae4;
+  --accent-fg: #161614;
+  --sidebar: #10100f;
+  --gold: #e2b340;
+  --red: #e15d5d;
+  --yellow: #e2b340;
+  --green: #3cba78;
 }
 
 @theme inline {
@@ -33,6 +23,8 @@
   --color-border: var(--border);
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
+  --color-sidebar: var(--sidebar);
+  --color-gold: var(--gold);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -40,4 +32,17 @@
 body {
   background: var(--background);
   color: var(--foreground);
+}
+
+/* Front page and sign-in, in the light marketing frame. The app stays dark. */
+.marketing {
+  --background: #ffffff;
+  --foreground: #111111;
+  --card: #ffffff;
+  --muted: #5a5a5a;
+  --border: rgba(17, 17, 17, 0.12);
+  --accent: #111111;
+  --accent-fg: #ffffff;
+  background: #ffffff;
+  color: #111111;
 }

@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card, secondaryButtonClass, Shell } from "@/components/ui";
+import { Studio } from "@/components/studio";
+import { buttonClass, Card, secondaryButtonClass } from "@/components/ui";
 import { deleteMyData, signOut } from "@/app/auth/actions";
 import { currentStudent } from "@/lib/auth/session";
 import { getGoals, semesterMap, type MapCourse, type MapDeadline } from "@/lib/db/repo";
@@ -10,11 +11,9 @@ import { AddDeadline } from "./AddDeadline";
 
 export default function MapPage() {
   return (
-    <Shell>
-      <Suspense fallback={<p className="text-muted">Loading your semester…</p>}>
-        <SemesterMap />
-      </Suspense>
-    </Shell>
+    <Suspense fallback={<p className="p-8 text-muted">Loading your semester…</p>}>
+      <SemesterMap />
+    </Suspense>
   );
 }
 
@@ -33,13 +32,17 @@ async function SemesterMap() {
   const weeks = groupByWeek(upcoming, tz);
 
   return (
-    <div className="flex flex-col gap-5">
+    <Studio>
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5 px-6 py-8">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Your semester</h1>
         <p className="text-muted">
           {upcoming.length} upcoming deadlines across {courses.length} courses
           {past > 0 ? ` (${past} already past)` : ""}.
         </p>
+        <Link href="/learn" className={`${buttonClass} mt-3`}>
+          Open the map
+        </Link>
         {goals.length > 0 && (
           <ul className="mt-2 flex flex-wrap gap-1.5">
             {goals.map((g) => (
@@ -87,7 +90,7 @@ async function SemesterMap() {
                 {c.name && c.name !== c.displayCode ? <span className="font-normal text-muted"> · {c.name}</span> : null}
               </h3>
               {list.length === 0 ? (
-                <p className="mt-1 text-sm text-muted">No topics yet. Upload the syllabus to get them.</p>
+                <p className="mt-1 text-sm text-muted">No topics yet. Name one on the learn page and Ready will write the outline, or upload a syllabus.</p>
               ) : (
                 <ol className="mt-2 flex flex-col gap-1 text-sm">
                   {list.map((t, i) => (
@@ -115,6 +118,7 @@ async function SemesterMap() {
         </form>
       </footer>
     </div>
+    </Studio>
   );
 }
 

@@ -1,5 +1,6 @@
 import { env } from "@/lib/env";
 import { anthropicProvider } from "./anthropic";
+import { geminiProvider } from "./gemini";
 import type { LlmProvider } from "./types";
 
 export * from "./types";
@@ -10,6 +11,7 @@ let override: LlmProvider | null | undefined;
 export function getLlm(): LlmProvider | null {
   if (override !== undefined) return override;
   if (env.llmProvider === "anthropic") return anthropicProvider(env.llmModel);
+  if (env.llmProvider === "gemini") return geminiProvider(env.llmModel);
   return null;
 }
 

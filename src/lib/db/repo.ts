@@ -9,6 +9,7 @@ import { localDateKey, zonedDate } from "@/lib/time";
 export type Student = {
   id: string;
   email: string;
+  displayName: string | null;
   school: string | null;
   major: string | null;
   year: string | null;
@@ -30,17 +31,46 @@ const hash = (s: string) => createHash("sha256").update(s).digest("hex");
 
 // ---- students --------------------------------------------------------------
 
-export async function upsertStudentByEmail(email: string): Promise<Student> {
+const studentReturning = sql`id, email, display_name, school, major, year, timezone, phone_e164, onboarding_answers, onboarding_done_at`;
+
+export async function upsertStudentByEmail(email: string, displayName?: string | null): Promise<Student> {
+  const name = displayName?.trim() || null;
   const [s] = await sql<Student[]>`
-    insert into students (email) values (${email.trim().toLowerCase()})
-    on conflict (email) do update set email = excluded.email
-    returning *`;
+    insert into students (email, display_name) values (${email.trim().toLowerCase()}, ${name})
+    on conflict (email) do update set
+      display_name = coalesce(students.display_name, excluded.display_name)
+    returning ${studentReturning}`;
   return s;
 }
 
 export async function getStudent(id: string): Promise<Student | null> {
-  const [s] = await sql<Student[]>`select * from students where id = ${id}`;
+  const [s] = await sql<Student[]>`select ${studentReturning} from students where id = ${id}`;
   return s ?? null;
+}
+
+export async function studentAuthByEmail(email: string) {
+  const [row] = await sql<{ id: string; passwordHash: string | null; onboardingDoneAt: Date | null }[]>`
+    select id, password_hash, onboarding_done_at from students where email = ${email.trim().toLowerCase()}`;
+  return row ?? null;
+}
+
+/** Creates a password account, or sets the first password on an email that only signed in with Google. */
+export async function registerStudent(email: string, passwordHash: string, displayName: string | null): Promise<"created" | "claimed" | "exists"> {
+  const existing = await studentAuthByEmail(email);
+  const name = displayName?.trim() || null;
+  if (!existing) {
+    await sql`
+      insert into students (email, display_name, password_hash)
+      values (${email.trim().toLowerCase()}, ${name}, ${passwordHash})`;
+    return "created";
+  }
+  if (!existing.passwordHash) {
+    await sql`
+      update students set password_hash = ${passwordHash}, display_name = coalesce(display_name, ${name})
+      where id = ${existing.id}`;
+    return "claimed";
+  }
+  return "exists";
 }
 
 export async function deleteStudent(id: string) {
@@ -133,7 +163,7 @@ export type ImportCounts = { added: number; updated: number; duplicates: number 
 export async function importDeadlines(
   student: Pick<Student, "id" | "timezone">,
   items: NewDeadline[],
-  source: "ics" | "upload" | "manual",
+  source: "ics" | "upload" | "manual" | "canvas",
   materialId: string | null = null,
 ): Promise<ImportCounts> {
   const counts: ImportCounts = { added: 0, updated: 0, duplicates: 0 };
@@ -200,6 +230,18 @@ export async function addManualDeadline(
 
 // ---- calendar feeds --------------------------------------------------------
 
+export async function saveCanvasLink(studentId: string, baseUrl: string, token: string) {
+  await sql`
+    insert into canvas_links (student_id, base_url, token)
+    values (${studentId}, ${baseUrl}, ${token})
+    on conflict (student_id) do update set base_url = excluded.base_url, token = excluded.token, connected_at = now()`;
+}
+
+export async function canvasLink(studentId: string) {
+  const [row] = await sql<{ baseUrl: string; token: string }[]>`select base_url, token from canvas_links where student_id = ${studentId}`;
+  return row ?? null;
+}
+
 export async function recordFeedSync(studentId: string, url: string, error: string | null) {
   await sql`
     insert into calendar_feeds (student_id, url, last_synced_at, last_error)
@@ -213,7 +255,7 @@ export async function recordFeedSync(studentId: string, url: string, error: stri
 
 export async function saveMaterial(
   studentId: string,
-  m: { filename: string; mime: string; kind: "syllabus" | "slides" | "screenshot" | "other"; text: string; contentHash: string; courseId: string | null },
+  m: { filename: string; mime: string; kind: "syllabus" | "notes" | "slides" | "screenshot" | "other"; text: string; contentHash: string; courseId: string | null },
 ): Promise<{ id: string; isNew: boolean }> {
   const [row] = await sql<{ id: string; inserted: boolean }[]>`
     insert into materials (student_id, course_id, filename, mime, kind, extracted_text, sha256)
@@ -221,6 +263,26 @@ export async function saveMaterial(
     on conflict (student_id, sha256) do update set filename = excluded.filename
     returning id, (xmax = 0) as inserted`;
   return { id: row.id, isNew: row.inserted };
+}
+
+/** A topic the learner named that is not on a syllabus yet. Same name returns the existing row. */
+export async function ensureNamedTopic(studentId: string, raw: string): Promise<{ id: string; name: string }> {
+  const name = raw
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, 80)
+    .replace(/\p{L}+/gu, (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase());
+  const courseId = await getOrCreateCourse(studentId, { code: "CHOSEN", displayCode: "Chosen", name: "Topics you named" });
+  const [existing] = await sql<{ id: string; name: string }[]>`
+    select id, name from topics where student_id = ${studentId} and course_id = ${courseId} and lower(name) = ${name.toLowerCase()}`;
+  if (existing) return existing;
+  const [{ max }] = await sql<{ max: number }[]>`select coalesce(max(position), -1)::int as max from topics where course_id = ${courseId}`;
+  const [row] = await sql<{ id: string; name: string }[]>`
+    insert into topics (student_id, course_id, name, position)
+    values (${studentId}, ${courseId}, ${name}, ${max + 1})
+    on conflict (course_id, lower(name)) do update set name = topics.name
+    returning id, name`;
+  return row;
 }
 
 export async function saveTopics(studentId: string, courseId: string, topics: MaterialExtraction["topics"], materialId: string) {

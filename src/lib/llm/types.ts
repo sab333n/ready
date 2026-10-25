@@ -3,6 +3,8 @@ import type { z } from "zod";
 export type LlmImage = { mediaType: "image/png" | "image/jpeg" | "image/webp" | "image/gif"; base64: string };
 
 export type GenerateObjectRequest<T extends z.ZodType> = {
+  /** Which prompt produced this request (e.g. "grade-answer.v1"), for logs and test fakes. */
+  promptId: string;
   system: string;
   prompt: string;
   schema: T;
@@ -10,7 +12,7 @@ export type GenerateObjectRequest<T extends z.ZodType> = {
   maxTokens?: number;
 };
 
-// Every provider (Claude today, Gemini later) implements this one interface,
+// Every provider (Gemini or Claude) implements this one interface,
 // so callers never import a vendor SDK directly.
 export interface LlmProvider {
   name: string;

@@ -4,7 +4,23 @@ import { useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { buttonClass, inputClass } from "@/components/ui";
-import { connectCalendar, uploadMaterials, type CalendarState, type UploadState } from "./actions";
+import { connectCalendar, connectCanvas, uploadMaterials, type CalendarState, type UploadState } from "./actions";
+
+export function CanvasForm({ connected }: { connected: string | null }) {
+  const [state, action, pending] = useActionState<CalendarState, FormData>(connectCanvas, undefined);
+  useRefreshOn(state);
+  return (
+    <form action={action} className="flex flex-col gap-2">
+      <input name="base" type="url" inputMode="url" defaultValue={connected ?? ""} placeholder="https://yourschool.instructure.com" className={inputClass} aria-label="Canvas address" />
+      <input name="token" type="password" autoComplete="off" placeholder={connected ? "Token saved. Paste a new one to replace it." : "Access token"} className={inputClass} aria-label="Canvas access token" />
+      <button className={buttonClass} disabled={pending}>
+        {pending ? "Connecting…" : connected ? "Sync Canvas" : "Connect Canvas"}
+      </button>
+      {state?.ok && <p className="text-sm text-[var(--green)]">{state.ok}</p>}
+      {state?.error && <p className="text-sm text-[var(--red)]">{state.error}</p>}
+    </form>
+  );
+}
 
 export function CalendarForm() {
   const [state, action, pending] = useActionState<CalendarState, FormData>(connectCalendar, undefined);
@@ -30,16 +46,23 @@ export function UploadForm() {
   useRefreshOn(state);
   return (
     <form action={action} className="flex flex-col gap-2">
-      <input name="files" type="file" multiple accept="application/pdf,image/png,image/jpeg,image/webp" className="text-sm" aria-label="Files" />
+      <input name="files" type="file" multiple accept="application/pdf,.pptx,.docx,image/png,image/jpeg,image/webp" className="text-sm" aria-label="Files" />
       <button className={buttonClass} disabled={pending}>
         {pending ? "Reading your files…" : "Upload"}
       </button>
       {state?.results?.map((r) => (
         <p key={r.filename} className="text-sm">
           <span className="font-medium">{r.filename}</span>
-          {r.course ? ` (${r.course})` : ""}: {plural(r.added + r.updated, "deadline")}, {plural(r.topics, "topic")}
-          {r.duplicates > 0 ? `, ${r.duplicates} already on your calendar` : ""}.
-          {r.notes && <span className="block text-muted">{r.notes}</span>}
+          {r.course ? ` (${r.course})` : ""}:{" "}
+          {r.kind === "notes" && r.added + r.updated === 0 && r.topics === 0 ? (
+            "saved as teaching notes. The classroom uses them as the source of truth."
+          ) : (
+            <>
+              {plural(r.added + r.updated, "deadline")}, {plural(r.topics, "topic")}
+              {r.duplicates > 0 ? `, ${r.duplicates} already on your calendar` : ""}.
+              {r.notes && <span className="block text-muted">{r.notes}</span>}
+            </>
+          )}
         </p>
       ))}
       {state?.errors?.map((e) => (

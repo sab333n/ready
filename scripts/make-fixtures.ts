@@ -80,6 +80,66 @@ export const SYLLABUS_LINES = [
   "All graded work must be your own.",
 ];
 
+// Lecture notes: the teaching content. Fictional course, standard textbook facts.
+export const NOTES_PAGES: string[][] = [
+  [
+    "PHARM 201 Lecture Notes: Pharmacokinetics and Antihypertensives",
+    "",
+    "Pharmacokinetics and Pharmacodynamics",
+    "Pharmacokinetics describes what the body does to a drug: absorption, distribution, metabolism, and excretion.",
+    "Pharmacodynamics describes what the drug does to the body, including its effects at receptors.",
+    "Half-life is the time it takes for the plasma concentration of a drug to decrease by half.",
+    "Drugs with a narrow therapeutic index, such as digoxin, require careful monitoring of blood levels.",
+    "",
+    "Antihypertensives",
+    "ACE inhibitors such as lisinopril block the conversion of angiotensin I to angiotensin II, which lowers blood pressure.",
+    "A dry, persistent cough is a common side effect of ACE inhibitors.",
+    "ACE inhibitors can raise potassium levels, so monitor patients for hyperkalemia.",
+    "Calcium channel blockers such as amlodipine relax vascular smooth muscle, which lowers blood pressure.",
+  ],
+  [
+    "Cardiac Drugs",
+    "",
+    "Beta blockers such as metoprolol block beta-1 receptors in the heart, which decreases heart rate and lowers blood pressure.",
+    "Before giving metoprolol, check the apical pulse; hold the dose and notify the provider if it is below 60 beats per minute.",
+    "Digoxin increases the force of contraction of the heart and slows the heart rate.",
+    "Low potassium (hypokalemia) increases the risk of digoxin toxicity, so check potassium levels before giving cardiac drugs like digoxin.",
+    "Early signs of digoxin toxicity include nausea, vomiting, and visual changes such as yellow-green halos.",
+    "Nitroglycerin dilates blood vessels, which reduces the workload of the heart and relieves angina chest pain.",
+    "Loop diuretics such as furosemide can cause hypokalemia, which matters for patients who also take digoxin.",
+  ],
+];
+
+export async function notesPdf(pages = NOTES_PAGES): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  for (const lines of pages) {
+    const page = doc.addPage([612, 792]);
+    let y = 740;
+    for (const line of lines) {
+      const heading = line.length < 60 && line && !line.endsWith(".");
+      // Wrap long lines at ~95 characters.
+      const words = line.split(" ");
+      let current = "";
+      const rows: string[] = [];
+      for (const w of words) {
+        if ((current + " " + w).length > 95) {
+          rows.push(current);
+          current = w;
+        } else current = current ? `${current} ${w}` : w;
+      }
+      rows.push(current);
+      for (const row of rows) {
+        page.drawText(row, { x: 56, y, size: heading ? 13 : 11, font: heading ? bold : font });
+        y -= 16;
+      }
+      y -= line ? 4 : 8;
+    }
+  }
+  return doc.save();
+}
+
 export async function syllabusPdf(lines = SYLLABUS_LINES): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -106,6 +166,10 @@ if (process.argv[1]?.endsWith("make-fixtures.ts")) {
   syllabusPdf().then((bytes) => {
     writeFileSync("fixtures/pharm-201-syllabus.pdf", bytes);
     copyFileSync("fixtures/pharm-201-syllabus.pdf", "public/demo/pharm-201-syllabus.pdf");
-    console.log("wrote fixtures/ and public/demo/ (demo-canvas.ics, pharm-201-syllabus.pdf)");
+    return notesPdf();
+  }).then((bytes) => {
+    writeFileSync("fixtures/pharm-201-cardiac-notes.pdf", bytes);
+    copyFileSync("fixtures/pharm-201-cardiac-notes.pdf", "public/demo/pharm-201-cardiac-notes.pdf");
+    console.log("wrote fixtures/ and public/demo/ (demo-canvas.ics, pharm-201-syllabus.pdf, pharm-201-cardiac-notes.pdf)");
   });
 }
